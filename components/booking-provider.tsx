@@ -58,7 +58,7 @@ const initialZoneConfigs: ZoneConfig[] = [
   { id: "C", name: "โซน C", isActive: false, description: "โซนหลังร้าน" },
 ]
 
-// Mock data สำหรับประวัติการจอง
+// Mock data สำหรับประวัติการจอง (ปรับให้เป็น 9 ที่นั่งต่อโต๊ะ)
 const initialBookingHistory: BookingRecord[] = [
   {
     id: "BK001234",
@@ -67,9 +67,10 @@ const initialBookingHistory: BookingRecord[] = [
     seats: [
       { tableId: 1, seatNumber: 1, zone: "A" },
       { tableId: 1, seatNumber: 2, zone: "A" },
+      { tableId: 1, seatNumber: 3, zone: "A" },
     ],
     notes: "ขอโต๊ะใกล้หน้าต่าง",
-    totalPrice: 300,
+    totalPrice: 450,
     status: "confirmed",
     bookingDate: "2024-01-15 14:30",
     paymentProof: "/placeholder.svg?height=200&width=300",
@@ -78,8 +79,11 @@ const initialBookingHistory: BookingRecord[] = [
     id: "BK001235",
     customerName: "สมหญิง รักดี",
     phone: "082-345-6789",
-    seats: [{ tableId: 25, seatNumber: 1, zone: "B" }],
-    totalPrice: 150,
+    seats: [
+      { tableId: 25, seatNumber: 1, zone: "B" },
+      { tableId: 25, seatNumber: 2, zone: "B" },
+    ],
+    totalPrice: 300,
     status: "pending",
     bookingDate: "2024-01-15 15:45",
     paymentProof: "/placeholder.svg?height=200&width=300",

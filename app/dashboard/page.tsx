@@ -291,7 +291,7 @@ export default function DashboardPage() {
                     </p>
                   </div>
 
-                  <div className="text-xs text-muted-foreground">โซนนี้มีโต๊ะทั้งหมด 20 โต๊ะ (80 ที่นั่ง)</div>
+                  <div className="text-xs text-muted-foreground">โซนนี้มีโต๊ะทั้งหมด 20 โต๊ะ (180 ที่นั่ง)</div>
                 </CardContent>
               </Card>
             ))}
@@ -315,7 +315,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="text-center">
                   <p className="text-2xl font-bold text-blue-600">
-                    {zoneConfigs.filter((z) => z.isActive).length * 80}
+                    {zoneConfigs.filter((z) => z.isActive).length * 180}
                   </p>
                   <p className="text-sm text-muted-foreground">ที่นั่งที่เปิดให้บริการ</p>
                 </div>

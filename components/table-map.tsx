@@ -27,7 +27,7 @@ interface Table {
 export function TableMap() {
   const { selectedSeats, setSelectedSeats, zoneConfigs } = useBooking()
 
-  // สร้างข้อมูลโต๊ะสำหรับ 3 โซน โซนละ 20 โต๊ะ
+  // สร้างข้อมูลโต๊ะสำหรับ 3 โซน โซนละ 20 โต๊ะ แต่ละโต๊ะมี 9 ที่นั่ง
   const [tables] = useState<Table[]>(() => {
     const allTables: Table[] = []
     const zones = ["A", "B", "C"]
@@ -38,18 +38,24 @@ export function TableMap() {
         const row = Math.floor((i - 1) / 5)
         const col = (i - 1) % 5
 
+        // สร้าง 9 ที่นั่งสำหรับแต่ละโต๊ะ
+        const seats: Seat[] = []
+        for (let seatNum = 1; seatNum <= 9; seatNum++) {
+          seats.push({
+            id: `${tableId}-${seatNum}`,
+            tableId,
+            seatNumber: seatNum,
+            isBooked: Math.random() > 0.8, // สุ่มสถานะการจอง
+          })
+        }
+
         allTables.push({
           id: tableId,
           name: `${zone}${i}`,
           zone: zone,
-          x: col * 180 + 20,
-          y: row * 120 + 20,
-          seats: [
-            { id: `${tableId}-1`, tableId, seatNumber: 1, isBooked: Math.random() > 0.8 },
-            { id: `${tableId}-2`, tableId, seatNumber: 2, isBooked: Math.random() > 0.8 },
-            { id: `${tableId}-3`, tableId, seatNumber: 3, isBooked: Math.random() > 0.8 },
-            { id: `${tableId}-4`, tableId, seatNumber: 4, isBooked: Math.random() > 0.8 },
-          ],
+          x: col * 200 + 50, // เพิ่มระยะห่างระหว่างโต๊ะ
+          y: row * 200 + 50,
+          seats: seats,
         })
       }
     })
@@ -94,13 +100,13 @@ export function TableMap() {
   const getSeatColor = (status: string) => {
     switch (status) {
       case "booked":
-        return "bg-red-500 text-white cursor-not-allowed"
+        return "bg-red-500 text-white cursor-not-allowed border-red-600"
       case "selected":
-        return "bg-primary text-primary-foreground"
+        return "bg-primary text-primary-foreground border-primary"
       case "available":
-        return "bg-green-100 text-green-800 hover:bg-green-200"
+        return "bg-green-100 text-green-800 hover:bg-green-200 border-green-300"
       default:
-        return "bg-gray-100"
+        return "bg-gray-100 border-gray-300"
     }
   }
 
@@ -117,6 +123,15 @@ export function TableMap() {
     }
   }
 
+  // ฟังก์ชันคำนวณตำแหน่งเก้าอี้รอบโต๊ะวงกลม
+  const getSeatPosition = (seatNumber: number, tableRadius = 60) => {
+    // คำนวณมุมสำหรับแต่ละเก้าอี้ (360 องศา / 9 เก้าอี้ = 40 องศาต่อเก้าอี้)
+    const angle = ((seatNumber - 1) * 40 - 90) * (Math.PI / 180) // เริ่มจากด้านบน (-90 องศา)
+    const x = Math.cos(angle) * tableRadius
+    const y = Math.sin(angle) * tableRadius
+    return { x, y }
+  }
+
   const renderZoneMap = (zone: string) => {
     const zoneTables = activeTables.filter((table) => table.zone === zone)
 
@@ -125,38 +140,54 @@ export function TableMap() {
     }
 
     return (
-      <div className={cn("relative rounded-lg p-4 min-h-[500px] overflow-auto", getZoneColor(zone))}>
+      <div className={cn("relative rounded-lg p-4 min-h-[800px] overflow-auto", getZoneColor(zone))}>
         {zoneTables.map((table) => (
           <div key={table.id} className="absolute" style={{ left: table.x, top: table.y }}>
-            <Card className="w-36">
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-center">
-                  <CardTitle className="text-xs">{table.name}</CardTitle>
-                  <Button variant="outline" size="sm" onClick={() => handleTableSelect(table)} className="text-xs h-6">
-                    เลือก
+            {/* โต๊ะวงกลม */}
+            <div className="relative">
+              {/* วงกลมโต๊ะ */}
+              <div className="w-24 h-24 bg-amber-100 border-4 border-amber-300 rounded-full flex items-center justify-center shadow-lg">
+                <div className="text-center">
+                  <div className="text-xs font-bold text-amber-800">{table.name}</div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleTableSelect(table)}
+                    className="text-xs h-4 p-1 mt-1 bg-amber-200 hover:bg-amber-300"
+                  >
+                    เลือกทั้งโต๊ะ
                   </Button>
                 </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="grid grid-cols-2 gap-1">
-                  {table.seats.map((seat) => {
-                    const status = getSeatStatus(seat)
-                    return (
-                      <Button
-                        key={seat.id}
-                        variant="outline"
-                        size="sm"
-                        className={cn("h-6 text-xs", getSeatColor(status))}
-                        onClick={() => handleSeatClick(seat)}
-                        disabled={seat.isBooked}
-                      >
-                        {seat.seatNumber}
-                      </Button>
-                    )
-                  })}
-                </div>
-              </CardContent>
-            </Card>
+              </div>
+
+              {/* เก้าอี้รอบโต๊ะ */}
+              {table.seats.map((seat) => {
+                const position = getSeatPosition(seat.seatNumber)
+                const status = getSeatStatus(seat)
+
+                return (
+                  <button
+                    key={seat.id}
+                    className={cn(
+                      "absolute w-8 h-8 rounded-full border-2 text-xs font-medium transition-all duration-200 transform hover:scale-110 flex items-center justify-center shadow-md",
+                      getSeatColor(status),
+                      seat.isBooked ? "cursor-not-allowed" : "cursor-pointer",
+                    )}
+                    style={{
+                      left: `calc(50% + ${position.x}px - 16px)`, // ลบ 16px (ครึ่งหนึ่งของความกว้าง) เพื่อจัดกึ่งกลาง
+                      top: `calc(50% + ${position.y}px - 16px)`, // ลบ 16px (ครึ่งหนึ่งของความสูง) เพื่อจัดกึ่งกลาง
+                    }}
+                    onClick={() => handleSeatClick(seat)}
+                    disabled={seat.isBooked}
+                    title={`ที่นั่ง ${seat.seatNumber} - ${
+                      seat.isBooked ? "จองแล้ว" : status === "selected" ? "เลือกแล้ว" : "ว่าง"
+                    }`}
+                  >
+                    {seat.seatNumber}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         ))}
       </div>
@@ -170,18 +201,25 @@ export function TableMap() {
           <CardTitle>แผนผังโต๊ะและที่นั่ง</CardTitle>
           <div className="flex gap-4 text-sm">
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-green-100 border rounded"></div>
+              <div className="w-4 h-4 bg-green-100 border border-green-300 rounded-full"></div>
               <span>ว่าง</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-primary border rounded"></div>
+              <div className="w-4 h-4 bg-primary border border-primary rounded-full"></div>
               <span>เลือกแล้ว</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-red-500 border rounded"></div>
+              <div className="w-4 h-4 bg-red-500 border border-red-600 rounded-full"></div>
               <span>จองแล้ว</span>
             </div>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 bg-amber-100 border-2 border-amber-300 rounded-full"></div>
+              <span>โต๊ะ</span>
+            </div>
           </div>
+          <p className="text-sm text-muted-foreground mt-2">
+            แต่ละโต๊ะมี 9 ที่นั่งเรียงรอบโต๊ะวงกลม คลิกที่เก้าอี้เพื่อเลือกที่นั่ง หรือคลิก "เลือกทั้งโต๊ะ" เพื่อเลือกทั้งโต๊ะ
+          </p>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="A" className="w-full">
@@ -203,6 +241,7 @@ export function TableMap() {
                 <div className="mb-4">
                   <h3 className="text-lg font-semibold">{zone.name}</h3>
                   <p className="text-sm text-muted-foreground">{zone.description}</p>
+                  <p className="text-xs text-muted-foreground mt-1">โซนนี้มี 20 โต๊ะ (180 ที่นั่ง) - แต่ละโต๊ะมี 9 ที่นั่ง</p>
                 </div>
                 {renderZoneMap(zone.id)}
               </TabsContent>

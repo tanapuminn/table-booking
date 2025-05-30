@@ -121,7 +121,7 @@ export default function TicketPage() {
 
           <div>
             <p className="text-sm font-medium text-muted-foreground mb-2">ที่นั่งที่จอง</p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {selectedSeats.map((seat) => {
                 // คำนวณโซนและชื่อโต๊ะ
                 let zone = "A"
@@ -135,9 +135,12 @@ export default function TicketPage() {
                 }
 
                 return (
-                  <div key={seat.id} className="bg-primary text-primary-foreground p-3 rounded text-center font-medium">
+                  <div
+                    key={seat.id}
+                    className="bg-primary text-primary-foreground p-2 rounded text-center font-medium text-sm"
+                  >
                     {zone}
-                    {tableNumber} ที่นั่ง {seat.seatNumber}
+                    {tableNumber} ที่ {seat.seatNumber}
                   </div>
                 )
               })}
