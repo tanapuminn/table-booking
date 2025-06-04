@@ -23,12 +23,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Edit, Trash2, Eye, Search, Settings } from "lucide-react"
+import { Edit, Trash2, Eye, Search, Settings, Home } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useBooking, type BookingRecord } from "@/components/booking-provider"
+// เพิ่ม import
+import { TableLayoutEditor } from "@/components/table-layout-editor"
+import { useRouter } from "next/navigation"
 
 export default function DashboardPage() {
   const { toast } = useToast()
+  const router = useRouter()
   const { bookingHistory, updateBookingRecord, zoneConfigs, updateZoneConfig } = useBooking()
   const [searchTerm, setSearchTerm] = useState("")
   const [editingBooking, setEditingBooking] = useState<BookingRecord | null>(null)
@@ -58,11 +62,35 @@ export default function DashboardPage() {
   }
 
   const handleZoneToggle = (zoneId: string, isActive: boolean) => {
-    updateZoneConfig(zoneId, isActive)
+    updateZoneConfig(zoneId, { isActive })
     toast({
       title: `${isActive ? "เปิด" : "ปิด"}โซน ${zoneId} สำเร็จ`,
       description: `โซน ${zoneId} ${isActive ? "พร้อมให้บริการ" : "ปิดให้บริการชั่วคราว"}`,
     })
+  }
+
+  // เพิ่มฟังก์ชันจัดการการจองรายที่นั่ง
+  const handleIndividualSeatBookingToggle = (zoneId: string, allowIndividualSeatBooking: boolean) => {
+    updateZoneConfig(zoneId, { allowIndividualSeatBooking })
+    toast({
+      title: `${allowIndividualSeatBooking ? "เปิด" : "ปิด"}การจองรายที่นั่งในโซน ${zoneId}`,
+      description: `โซน ${zoneId} ${allowIndividualSeatBooking ? "สามารถจองรายที่นั่งได้" : "จองได้เฉพาะทั้งโต๊ะ"}`,
+    })
+  }
+
+  // เพิ่มฟังก์ชันจัดการราคา
+  const handlePriceChange = (zoneId: string, type: "seatPrice" | "tablePrice", value: number) => {
+    if (value < 0) return // ป้องกันราคาติดลบ
+
+    updateZoneConfig(zoneId, { [type]: value })
+    toast({
+      title: "อัพเดทราคาสำเร็จ",
+      description: `อัพเดทราคา${type === "seatPrice" ? "ต่อที่นั่ง" : "ต่อโต๊ะ"}ของโซน ${zoneId} เป็น ${value} บาท`,
+    })
+  }
+
+  const navigateToHome = () => {
+    router.push("/")
   }
 
   const getStatusColor = (status: string) => {
@@ -111,15 +139,23 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold">จัดการระบบจองโต๊ะ</h2>
-        <Badge variant="outline" className="text-lg px-3 py-1">
-          ทั้งหมด {bookingHistory.length} รายการ
-        </Badge>
+        <div className="flex items-center gap-4">
+          <Badge variant="outline" className="text-lg px-3 py-1">
+            ทั้งหมด {bookingHistory.length} รายการ
+          </Badge>
+          <Button variant="outline" onClick={navigateToHome} className="flex items-center gap-2" title="กลับสู่หน้าหลัก">
+            <Home className="h-4 w-4" />
+            หน้าหลัก
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="bookings" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        {/* เพิ่ม tab ใหม่ในส่วน TabsList */}
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="bookings">จัดการการจอง</TabsTrigger>
           <TabsTrigger value="zones">จัดการโซน</TabsTrigger>
+          <TabsTrigger value="layout">จัดการตำแหน่งโต๊ะ</TabsTrigger>
         </TabsList>
 
         <TabsContent value="bookings" className="space-y-6">
@@ -284,6 +320,82 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
+                  {/* เพิ่มการตั้งค่าการจองรายที่นั่ง */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium">การจองรายที่นั่ง</Label>
+                      <Switch
+                        checked={zone.allowIndividualSeatBooking}
+                        onCheckedChange={(checked) => handleIndividualSeatBookingToggle(zone.id, checked)}
+                        disabled={!zone.isActive}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {zone.allowIndividualSeatBooking ? "ลูกค้าสามารถเลือกจองรายที่นั่งได้" : "ลูกค้าต้องจองทั้งโต๊ะเท่านั้น"}
+                    </p>
+                  </div>
+
+                  {/* เพิ่มการตั้งค่าราคา */}
+                  <div className="space-y-3 border-t pt-3">
+                    <Label className="text-sm font-medium">ตั้งค่าราคา</Label>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor={`seat-price-${zone.id}`} className="text-xs">
+                            ราคาต่อที่นั่ง
+                          </Label>
+                          <Badge variant="outline" className="text-xs">
+                            บาท
+                          </Badge>
+                        </div>
+                        <div className="flex items-center">
+                          <Input
+                            id={`seat-price-${zone.id}`}
+                            type="number"
+                            min="0"
+                            value={zone.seatPrice}
+                            onChange={(e) =>
+                              handlePriceChange(zone.id, "seatPrice", Number.parseInt(e.target.value) || 0)
+                            }
+                            disabled={!zone.isActive || !zone.allowIndividualSeatBooking}
+                            className="text-right"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor={`table-price-${zone.id}`} className="text-xs">
+                            ราคาต่อโต๊ะ
+                          </Label>
+                          <Badge variant="outline" className="text-xs">
+                            บาท
+                          </Badge>
+                        </div>
+                        <div className="flex items-center">
+                          <Input
+                            id={`table-price-${zone.id}`}
+                            type="number"
+                            min="0"
+                            value={zone.tablePrice}
+                            onChange={(e) =>
+                              handlePriceChange(zone.id, "tablePrice", Number.parseInt(e.target.value) || 0)
+                            }
+                            disabled={!zone.isActive}
+                            className="text-right"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-muted-foreground">
+                      {zone.allowIndividualSeatBooking
+                        ? `จองรายที่นั่ง: ${zone.seatPrice} บาท/ที่นั่ง, จองทั้งโต๊ะ: ${zone.tablePrice} บาท/โต๊ะ (ประหยัด ${zone.seatPrice * 9 - zone.tablePrice} บาท)`
+                        : `จองได้เฉพาะทั้งโต๊ะในราคา ${zone.tablePrice} บาท/โต๊ะ (9 ที่นั่ง)`}
+                    </div>
+                  </div>
+
                   <div>
                     <Label className="text-sm font-medium">จำนวนที่นั่งที่จองแล้ว</Label>
                     <p className="text-2xl font-bold text-primary">
@@ -328,6 +440,11 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* เพิ่ม TabsContent ใหม่หลังจาก zones tab */}
+        <TabsContent value="layout" className="space-y-6">
+          <TableLayoutEditor />
         </TabsContent>
       </Tabs>
     </div>

@@ -10,10 +10,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { TableMap } from "@/components/table-map"
 import { useBooking } from "@/components/booking-provider"
 import { useToast } from "@/hooks/use-toast"
+import { Settings, User } from "lucide-react"
+// เพิ่ม import PriceSummary
+import { PriceSummary } from "@/components/price-summary"
 
 export default function HomePage() {
   const router = useRouter()
-  const { selectedSeats, setBookingInfo } = useBooking()
+  const { selectedSeats, setBookingInfo, calculateTotalPrice } = useBooking()
   const { toast } = useToast()
 
   const [customerInfo, setCustomerInfo] = useState({
@@ -56,11 +59,27 @@ export default function HomePage() {
     }, 500)
   }
 
+  const navigateToDashboard = () => {
+    router.push("/dashboard")
+  }
+
   return (
     <div className="space-y-8">
-      <div className="text-center">
-        <h2 className="text-3xl font-bold mb-2">เลือกโต๊ะและที่นั่ง</h2>
-        <p className="text-muted-foreground">คลิกเพื่อเลือกโต๊ะหรือที่นั่งที่ต้องการจอง</p>
+      {/* Header with navigation */}
+      <div className="flex justify-between items-center">
+        <div className="text-center flex-1">
+          <h2 className="text-3xl font-bold mb-2">เลือกโต๊ะและที่นั่ง</h2>
+          <p className="text-muted-foreground">คลิกเพื่อเลือกโต๊ะหรือที่นั่งที่ต้องการจอง</p>
+        </div>
+        <Button
+          variant="outline"
+          onClick={navigateToDashboard}
+          className="flex items-center gap-2"
+          title="เข้าสู่ระบบจัดการ"
+        >
+          <Settings className="h-4 w-4" />
+          จัดการระบบ
+        </Button>
       </div>
 
       <TableMap />
@@ -68,7 +87,10 @@ export default function HomePage() {
       {selectedSeats.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>ข้อมูลการจอง</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              ข้อมูลการจอง
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
@@ -113,6 +135,9 @@ export default function HomePage() {
                 rows={3}
               />
             </div>
+
+            {/* แทนที่ส่วนแสดงราคาเดิมด้วย PriceSummary */}
+            <PriceSummary selectedSeats={selectedSeats} />
 
             <Button onClick={handleBooking} className="w-full" size="lg">
               ดำเนินการจอง

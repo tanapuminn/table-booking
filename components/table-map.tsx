@@ -1,12 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useBooking } from "./booking-provider"
 import { cn } from "@/lib/utils"
+import { Info, InfoIcon as InfoCircle, Lock } from "lucide-react"
+// เพิ่ม import PriceSummary
+import { PriceSummary } from "./price-summary"
 
 interface Seat {
   id: string
@@ -25,50 +30,89 @@ interface Table {
 }
 
 export function TableMap() {
-  const { selectedSeats, setSelectedSeats, zoneConfigs } = useBooking()
+  const { selectedSeats, setSelectedSeats, zoneConfigs, tablePositions, bookingHistory } = useBooking()
+  const [selectedTable, setSelectedTable] = useState<Table | null>(null)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
 
-  // สร้างข้อมูลโต๊ะสำหรับ 3 โซน โซนละ 20 โต๊ะ แต่ละโต๊ะมี 9 ที่นั่ง
-  const [tables] = useState<Table[]>(() => {
-    const allTables: Table[] = []
-    const zones = ["A", "B", "C"]
+  // แทนที่การสร้าง tables ด้วย useMemo
+  const tables = useMemo(() => {
+    return tablePositions.map((tablePos) => {
+      // สร้าง seats โดย sync กับข้อมูลการจองจาก bookingHistory
+      const seats = tablePos.seats.map((seat) => {
+        // ตรวจสอบว่าที่นั่งนี้ถูกจองแล้วจาก bookingHistory หรือไม่
+        const isBookedFromHistory = bookingHistory
+          .filter((booking) => booking.status === "confirmed")
+          .some((booking) =>
+            booking.seats.some(
+              (bookedSeat) => bookedSeat.tableId === tablePos.id && bookedSeat.seatNumber === seat.seatNumber,
+            ),
+          )
 
-    zones.forEach((zone, zoneIndex) => {
-      for (let i = 1; i <= 20; i++) {
-        const tableId = zoneIndex * 20 + i
-        const row = Math.floor((i - 1) / 5)
-        const col = (i - 1) % 5
-
-        // สร้าง 9 ที่นั่งสำหรับแต่ละโต๊ะ
-        const seats: Seat[] = []
-        for (let seatNum = 1; seatNum <= 9; seatNum++) {
-          seats.push({
-            id: `${tableId}-${seatNum}`,
-            tableId,
-            seatNumber: seatNum,
-            isBooked: Math.random() > 0.8, // สุ่มสถานะการจอง
-          })
+        return {
+          id: `${tablePos.id}-${seat.seatNumber}`,
+          tableId: tablePos.id,
+          seatNumber: seat.seatNumber,
+          isBooked: isBookedFromHistory, // ใช้ข้อมูลจาก bookingHistory
         }
+      })
 
-        allTables.push({
-          id: tableId,
-          name: `${zone}${i}`,
-          zone: zone,
-          x: col * 200 + 50, // เพิ่มระยะห่างระหว่างโต๊ะ
-          y: row * 200 + 50,
-          seats: seats,
-        })
+      // ปรับปรุงการคำนวณตำแหน่ง x, y ให้มีระยะห่างระหว่างโต๊ะ
+      // ใช้ cellSize เท่ากับในหน้า table-layout-editor.tsx
+      const cellSize = 60
+      const padding = 20 // เพิ่มระยะห่างระหว่างโต๊ะ
+
+      return {
+        id: tablePos.id,
+        name: tablePos.name,
+        zone: tablePos.zone,
+        seats,
+        x: tablePos.x * (cellSize + padding) + 50,
+        y: tablePos.y * (cellSize + padding) + 50,
       }
     })
+  }, [tablePositions, bookingHistory])
 
-    return allTables
+  // กรองโต๊ะตามโซนที่เปิดใช้งานและโต๊ะที่ active
+  const activeZones = zoneConfigs.filter((zone) => zone.isActive).map((zone) => zone.id)
+  const activeTables = tables.filter((table) => {
+    const tablePos = tablePositions.find((t) => t.id === table.id)
+    return activeZones.includes(table.zone) && tablePos?.isActive
   })
 
-  // กรองโต๊ะตามโซนที่เปิดใช้งาน
-  const activeZones = zoneConfigs.filter((zone) => zone.isActive).map((zone) => zone.id)
-  const activeTables = tables.filter((table) => activeZones.includes(table.zone))
+  // ฟังก์ชันตรวจสอบว่าโต๊ะเต็มหรือไม่
+  const isTableFull = (table: Table) => {
+    return table.seats.every((seat) => seat.isBooked)
+  }
+
+  // ฟังก์ชันตรวจสอบว่าโต๊ะมีที่นั่งว่างหรือไม่
+  const hasAvailableSeats = (table: Table) => {
+    return table.seats.some((seat) => !seat.isBooked)
+  }
+
+  const handleTableClick = (table: Table) => {
+    // ตรวจสอบว่าโต๊ะเต็มหรือไม่
+    if (isTableFull(table)) {
+      return // ไม่ให้คลิกได้ถ้าโต๊ะเต็ม
+    }
+
+    setSelectedTable(table)
+    setIsDialogOpen(true)
+  }
 
   const handleSeatClick = (seat: Seat) => {
     if (seat.isBooked) return
+
+    // ตรวจสอบว่าโซนนี้อนุญาตให้จองรายที่นั่งหรือไม่
+    const table = tables.find((t) => t.id === seat.tableId)
+    const zoneConfig = zoneConfigs.find((z) => z.id === table?.zone)
+
+    if (!zoneConfig?.allowIndividualSeatBooking) {
+      // ถ้าไม่อนุญาตให้จองรายที่นั่ง ให้เลือกทั้งโต๊ะ
+      if (table) {
+        handleTableSelect(table)
+      }
+      return
+    }
 
     const isSelected = selectedSeats.some((s) => s.id === seat.id)
 
@@ -123,8 +167,54 @@ export function TableMap() {
     }
   }
 
-  // ฟังก์ชันคำนวณตำแหน่งเก้าอี้รอบโต๊ะวงกลม
-  const getSeatPosition = (seatNumber: number, tableRadius = 60) => {
+  const getTableColor = (table: Table) => {
+    // ตรวจสอบว่าโต๊ะนี้มีที่นั่งที่ถูกเลือกหรือไม่
+    const hasSelectedSeats = table.seats.some((seat) => selectedSeats.some((s) => s.id === seat.id))
+
+    // ตรวจสอบว่าโต๊ะนี้มีที่นั่งที่จองแล้วหรือไม่
+    const hasBookedSeats = table.seats.some((seat) => seat.isBooked)
+
+    // ตรวจสอบว่าโต๊ะนี้มีที่นั่งว่างทั้งหมดหรือไม่
+    const allSeatsAvailable = table.seats.every((seat) => !seat.isBooked)
+
+    // ตรวจสอบว่าโต๊ะนี้มีที่นั่งที่จองแล้วทั้งหมดหรือไม่
+    const allSeatsBooked = table.seats.every((seat) => seat.isBooked)
+
+    if (hasSelectedSeats) {
+      return "bg-primary border-primary-600 text-primary-foreground"
+    } else if (allSeatsBooked) {
+      return "bg-red-200 border-red-400 text-red-800 cursor-not-allowed opacity-60"
+    } else if (hasBookedSeats) {
+      return "bg-amber-200 border-amber-400 text-amber-800"
+    } else {
+      switch (table.zone) {
+        case "A":
+          return "bg-blue-100 border-blue-300 text-blue-800 hover:bg-blue-200"
+        case "B":
+          return "bg-green-100 border-green-300 text-green-800 hover:bg-green-200"
+        case "C":
+          return "bg-purple-100 border-purple-300 text-purple-800 hover:bg-purple-200"
+        default:
+          return "bg-amber-100 border-amber-300 text-amber-800 hover:bg-amber-200"
+      }
+    }
+  }
+
+  const getTableStatus = (table: Table) => {
+    const bookedSeats = table.seats.filter((seat) => seat.isBooked).length
+    const totalSeats = table.seats.length
+
+    if (bookedSeats === totalSeats) {
+      return "เต็ม"
+    } else if (bookedSeats > 0) {
+      return `ว่าง ${totalSeats - bookedSeats}/${totalSeats}`
+    } else {
+      return `ว่าง ${totalSeats}/${totalSeats}`
+    }
+  }
+
+  // ฟังก์ชันคำนวณตำแหน่งเก้าอี้รอบโต๊ะวงกลม (สำหรับ modal)
+  const getSeatPosition = (seatNumber: number, tableRadius = 100) => {
     // คำนวณมุมสำหรับแต่ละเก้าอี้ (360 องศา / 9 เก้าอี้ = 40 องศาต่อเก้าอี้)
     const angle = ((seatNumber - 1) * 40 - 90) * (Math.PI / 180) // เริ่มจากด้านบน (-90 องศา)
     const x = Math.cos(angle) * tableRadius
@@ -134,64 +224,85 @@ export function TableMap() {
 
   const renderZoneMap = (zone: string) => {
     const zoneTables = activeTables.filter((table) => table.zone === zone)
+    const zoneConfig = zoneConfigs.find((z) => z.id === zone)
 
     if (zoneTables.length === 0) {
       return <div className="text-center py-8 text-muted-foreground">โซนนี้ปิดให้บริการในขณะนี้</div>
     }
 
     return (
-      <div className={cn("relative rounded-lg p-4 min-h-[800px] overflow-auto", getZoneColor(zone))}>
-        {zoneTables.map((table) => (
-          <div key={table.id} className="absolute" style={{ left: table.x, top: table.y }}>
-            {/* โต๊ะวงกลม */}
-            <div className="relative">
-              {/* วงกลมโต๊ะ */}
-              <div className="w-24 h-24 bg-amber-100 border-4 border-amber-300 rounded-full flex items-center justify-center shadow-lg">
-                <div className="text-center">
-                  <div className="text-xs font-bold text-amber-800">{table.name}</div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleTableSelect(table)}
-                    className="text-xs h-4 p-1 mt-1 bg-amber-200 hover:bg-amber-300"
-                  >
-                    เลือกทั้งโต๊ะ
-                  </Button>
-                </div>
-              </div>
+      <div className="space-y-4">
+        {/* แสดงข้อมูลการจองของโซน */}
+        {zoneConfig && !zoneConfig.allowIndividualSeatBooking && (
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertDescription>โซนนี้จองได้เฉพาะทั้งโต๊ะเท่านั้น ไม่สามารถเลือกที่นั่งแยกได้</AlertDescription>
+          </Alert>
+        )}
 
-              {/* เก้าอี้รอบโต๊ะ */}
-              {table.seats.map((seat) => {
-                const position = getSeatPosition(seat.seatNumber)
-                const status = getSeatStatus(seat)
-
-                return (
-                  <button
-                    key={seat.id}
-                    className={cn(
-                      "absolute w-8 h-8 rounded-full border-2 text-xs font-medium transition-all duration-200 transform hover:scale-110 flex items-center justify-center shadow-md",
-                      getSeatColor(status),
-                      seat.isBooked ? "cursor-not-allowed" : "cursor-pointer",
-                    )}
-                    style={{
-                      left: `calc(50% + ${position.x}px - 16px)`, // ลบ 16px (ครึ่งหนึ่งของความกว้าง) เพื่อจัดกึ่งกลาง
-                      top: `calc(50% + ${position.y}px - 16px)`, // ลบ 16px (ครึ่งหนึ่งของความสูง) เพื่อจัดกึ่งกลาง
-                    }}
-                    onClick={() => handleSeatClick(seat)}
-                    disabled={seat.isBooked}
-                    title={`ที่นั่ง ${seat.seatNumber} - ${
-                      seat.isBooked ? "จองแล้ว" : status === "selected" ? "เลือกแล้ว" : "ว่าง"
-                    }`}
-                  >
-                    {seat.seatNumber}
-                  </button>
-                )
-              })}
-            </div>
+        {/* เพิ่ม grid layout เพื่อให้โต๊ะวางตามตำแหน่งที่กำหนดใน table-layout-editor */}
+        <div className={cn("relative rounded-lg p-4 min-h-[600px] overflow-auto", getZoneColor(zone))}>
+          {/* สร้าง grid เพื่อแสดงตำแหน่งโต๊ะ */}
+          <div className="grid grid-cols-10 gap-4 opacity-10 pointer-events-none absolute inset-0 p-4">
+            {Array.from({ length: 100 }, (_, i) => (
+              <div key={i} className="w-full h-16 border border-dashed border-gray-300 rounded"></div>
+            ))}
           </div>
-        ))}
+
+          {zoneTables.map((table) => {
+            const isFull = isTableFull(table)
+
+            return (
+              <div
+                key={table.id}
+                className="absolute"
+                style={{
+                  left: table.x,
+                  top: table.y,
+                  transition: "all 0.3s ease",
+                }}
+              >
+                {/* โต๊ะวงกลม */}
+                <button
+                  className={cn(
+                    "w-24 h-24 rounded-full flex flex-col items-center justify-center shadow-lg border-4 transition-all relative",
+                    getTableColor(table),
+                    isFull ? "cursor-not-allowed" : "hover:scale-105",
+                  )}
+                  onClick={() => handleTableClick(table)}
+                  disabled={isFull}
+                  title={isFull ? "โต๊ะเต็มแล้ว" : `คลิกเพื่อเลือกที่นั่ง - ${getTableStatus(table)}`}
+                >
+                  <span className="font-bold">{table.name}</span>
+                  <span className="text-xs">{getTableStatus(table)}</span>
+
+                  {/* แสดงไอคอนล็อคสำหรับโต๊ะที่เต็ม */}
+                  {isFull && (
+                    <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-1">
+                      <Lock className="h-3 w-3 text-white" />
+                    </div>
+                  )}
+                </button>
+              </div>
+            )
+          })}
+        </div>
       </div>
     )
+  }
+
+  const calculateTotalPrice = (seats: Seat[]) => {
+    let totalPrice = 0
+    seats.forEach((seat) => {
+      const table = tables.find((t) => t.id === seat.tableId)
+      const zoneConfig = zoneConfigs.find((z) => z.id === table?.zone)
+      if (zoneConfig?.allowIndividualSeatBooking) {
+        totalPrice += zoneConfig.seatPrice || 150 // Default seat price
+      } else {
+        totalPrice = zoneConfig?.tablePrice || 0 // Use table price if individual seats are not allowed
+      }
+    })
+    return totalPrice
   }
 
   return (
@@ -202,23 +313,23 @@ export function TableMap() {
           <div className="flex gap-4 text-sm">
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 bg-green-100 border border-green-300 rounded-full"></div>
-              <span>ว่าง</span>
+              <span>ว่างทั้งหมด</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-amber-200 border border-amber-400 rounded-full"></div>
+              <span>มีบางที่นั่งจองแล้ว</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-red-200 border border-red-400 rounded-full"></div>
+              <span>เต็มแล้ว</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 bg-primary border border-primary rounded-full"></div>
               <span>เลือกแล้ว</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-red-500 border border-red-600 rounded-full"></div>
-              <span>จองแล้ว</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 bg-amber-100 border-2 border-amber-300 rounded-full"></div>
-              <span>โต๊ะ</span>
-            </div>
           </div>
           <p className="text-sm text-muted-foreground mt-2">
-            แต่ละโต๊ะมี 9 ที่นั่งเรียงรอบโต๊ะวงกลม คลิกที่เก้าอี้เพื่อเลือกที่นั่ง หรือคลิก "เลือกทั้งโต๊ะ" เพื่อเลือกทั้งโต๊ะ
+            คลิกที่โต๊ะเพื่อดูรายละเอียดและเลือกที่นั่ง (โต๊ะที่เต็มแล้วจะไม่สามารถคลิกได้)
           </p>
         </CardHeader>
         <CardContent>
@@ -232,6 +343,11 @@ export function TableMap() {
                       ปิด
                     </Badge>
                   )}
+                  {zone.isActive && !zone.allowIndividualSeatBooking && (
+                    <Badge variant="outline" className="ml-2 text-xs">
+                      ทั้งโต๊ะ
+                    </Badge>
+                  )}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -241,7 +357,21 @@ export function TableMap() {
                 <div className="mb-4">
                   <h3 className="text-lg font-semibold">{zone.name}</h3>
                   <p className="text-sm text-muted-foreground">{zone.description}</p>
-                  <p className="text-xs text-muted-foreground mt-1">โซนนี้มี 20 โต๊ะ (180 ที่นั่ง) - แต่ละโต๊ะมี 9 ที่นั่ง</p>
+                  <div className="flex flex-wrap items-center gap-4 mt-2">
+                    <p className="text-xs text-muted-foreground">โซนนี้มี 20 โต๊ะ (180 ที่นั่ง) - แต่ละโต๊ะมี 9 ที่นั่ง</p>
+                    <Badge variant={zone.allowIndividualSeatBooking ? "default" : "secondary"} className="text-xs">
+                      {zone.allowIndividualSeatBooking ? "จองรายที่นั่งได้" : "จองทั้งโต๊ะเท่านั้น"}
+                    </Badge>
+
+                    <div className="flex items-center gap-1">
+                      <InfoCircle className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">
+                        {zone.allowIndividualSeatBooking
+                          ? `ราคา: ${zone.seatPrice} บาท/ที่นั่ง หรือ ${zone.tablePrice} บาท/โต๊ะ`
+                          : `ราคา: ${zone.tablePrice} บาท/โต๊ะ`}
+                      </span>
+                    </div>
+                  </div>
                 </div>
                 {renderZoneMap(zone.id)}
               </TabsContent>
@@ -250,30 +380,148 @@ export function TableMap() {
         </CardContent>
       </Card>
 
+      {/* Modal สำหรับเลือกที่นั่ง */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedTable?.name} - {selectedTable && getTableStatus(selectedTable)}
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedTable && (
+            <div className="py-4">
+              <div className="relative w-64 h-64 mx-auto mb-4">
+                {/* โต๊ะวงกลม */}
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-amber-100 border-4 border-amber-300 rounded-full flex items-center justify-center">
+                  <span className="font-bold">{selectedTable.name}</span>
+                </div>
+
+                {/* เก้าอี้รอบโต๊ะ */}
+                {selectedTable.seats.map((seat) => {
+                  const position = getSeatPosition(seat.seatNumber)
+                  const status = getSeatStatus(seat)
+                  const zoneConfig = zoneConfigs.find((z) => z.id === selectedTable.zone)
+                  const canSelectIndividual = zoneConfig?.allowIndividualSeatBooking
+
+                  return (
+                    <button
+                      key={seat.id}
+                      className={cn(
+                        "absolute w-10 h-10 rounded-full border-2 text-sm font-medium transition-all duration-200 transform hover:scale-110 flex items-center justify-center shadow-md",
+                        getSeatColor(status),
+                        seat.isBooked
+                          ? "cursor-not-allowed"
+                          : canSelectIndividual
+                            ? "cursor-pointer"
+                            : "cursor-pointer",
+                      )}
+                      style={{
+                        left: `calc(50% + ${position.x}px - 20px)`,
+                        top: `calc(50% + ${position.y}px - 20px)`,
+                      }}
+                      onClick={() => handleSeatClick(seat)}
+                      disabled={seat.isBooked}
+                      title={`ที่นั่ง ${seat.seatNumber} - ${
+                        seat.isBooked ? "จองแล้ว" : status === "selected" ? "เลือกแล้ว" : "ว่าง"
+                      }${!canSelectIndividual ? " (จองทั้งโต๊ะเท่านั้น)" : ""}`}
+                    >
+                      {seat.seatNumber}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <div className="flex gap-4 text-sm">
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-green-100 border border-green-300 rounded-full"></div>
+                      <span className="text-xs">ว่าง</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-primary border border-primary rounded-full"></div>
+                      <span className="text-xs">เลือกแล้ว</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-red-500 border border-red-600 rounded-full"></div>
+                      <span className="text-xs">จองแล้ว</span>
+                    </div>
+                  </div>
+
+                  {hasAvailableSeats(selectedTable) && (
+                    <Button size="sm" onClick={() => handleTableSelect(selectedTable)} variant="outline">
+                      {selectedTable.seats
+                        .filter((seat) => !seat.isBooked)
+                        .every((seat) => selectedSeats.some((s) => s.id === seat.id))
+                        ? "ยกเลิกทั้งโต๊ะ"
+                        : "เลือกทั้งโต๊ะ"}
+                    </Button>
+                  )}
+                </div>
+
+                {selectedTable.seats.some((seat) => selectedSeats.some((s) => s.id === seat.id)) && (
+                  <div className="bg-muted p-3 rounded-md">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">
+                        ที่นั่งที่เลือก:{" "}
+                        {selectedTable.seats.filter((seat) => selectedSeats.some((s) => s.id === seat.id)).length} ที่นั่ง
+                      </span>
+                      <span className="font-bold text-primary">
+                        ฿{calculateTotalPrice(selectedSeats.filter((seat) => seat.tableId === selectedTable.id))}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              ปิด
+            </Button>
+            <Button
+              onClick={() => setIsDialogOpen(false)}
+              disabled={
+                !selectedTable || !selectedTable.seats.some((seat) => selectedSeats.some((s) => s.id === seat.id))
+              }
+            >
+              ยืนยันการเลือก
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* แทนที่ส่วนแสดงราคาเดิมในส่วนท้ายของ component */}
       {selectedSeats.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>ที่นั่งที่เลือก ({selectedSeats.length} ที่นั่ง)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2 mb-4">
-              {selectedSeats.map((seat) => {
-                const table = tables.find((t) => t.id === seat.tableId)
-                return (
-                  <Badge key={seat.id} variant="default" className="text-sm">
-                    {table?.name} ที่นั่ง {seat.seatNumber}
-                  </Badge>
-                )
-              })}
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-lg font-medium">ราคารวม: ฿{selectedSeats.length * 150}</span>
-              <Button variant="outline" onClick={() => setSelectedSeats([])}>
-                ยกเลิกทั้งหมด
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>ที่นั่งที่เลือก ({selectedSeats.length} ที่นั่ง)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {selectedSeats.map((seat) => {
+                  const table = tables.find((t) => t.id === seat.tableId)
+                  return (
+                    <Badge key={seat.id} variant="default" className="text-sm">
+                      {table?.name} ที่นั่ง {seat.seatNumber}
+                    </Badge>
+                  )
+                })}
+              </div>
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={() => setSelectedSeats([])}>
+                  ยกเลิกทั้งหมด
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* เพิ่ม PriceSummary */}
+          <PriceSummary selectedSeats={selectedSeats} />
+        </>
       )}
     </div>
   )

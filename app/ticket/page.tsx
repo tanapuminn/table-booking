@@ -11,7 +11,8 @@ import type { BookingRecord } from "@/components/booking-provider"
 
 export default function TicketPage() {
   const router = useRouter()
-  const { selectedSeats, bookingInfo, clearBooking, addBookingRecord } = useBooking()
+  const { selectedSeats, bookingInfo, clearBooking, addBookingRecord, calculateTotalPrice, tablePositions } =
+    useBooking()
   const [bookingId] = useState(`BK${Date.now().toString().slice(-6)}`)
   const [bookingDate] = useState(
     new Date().toLocaleDateString("th-TH", {
@@ -34,10 +35,9 @@ export default function TicketPage() {
     if (bookingInfo && selectedSeats.length > 0 && !hasBookingSaved.current) {
       // สร้างข้อมูลการจองพร้อมข้อมูลโซน
       const seatsWithZone = selectedSeats.map((seat) => {
-        // คำนวณโซนจาก tableId
-        let zone = "A"
-        if (seat.tableId > 20 && seat.tableId <= 40) zone = "B"
-        else if (seat.tableId > 40) zone = "C"
+        // หาข้อมูลโต๊ะเพื่อดึงโซน
+        const table = tablePositions.find((t) => t.id === seat.tableId)
+        const zone = table ? table.zone : "A"
 
         return {
           tableId: seat.tableId,
@@ -46,13 +46,15 @@ export default function TicketPage() {
         }
       })
 
+      const totalPrice = calculateTotalPrice(selectedSeats)
+
       const newBookingRecord: BookingRecord = {
         id: bookingId,
         customerName: bookingInfo.name,
         phone: bookingInfo.phone,
         seats: seatsWithZone,
         notes: bookingInfo.notes || undefined,
-        totalPrice: selectedSeats.length * 150,
+        totalPrice: totalPrice,
         status: "confirmed",
         bookingDate: bookingDate,
         paymentProof: "/placeholder.svg?height=200&width=300",
@@ -61,7 +63,16 @@ export default function TicketPage() {
       addBookingRecord(newBookingRecord)
       hasBookingSaved.current = true
     }
-  }, [selectedSeats, bookingInfo, router, bookingId, bookingDate])
+  }, [
+    selectedSeats,
+    bookingInfo,
+    router,
+    bookingId,
+    bookingDate,
+    addBookingRecord,
+    tablePositions,
+    calculateTotalPrice,
+  ])
 
   const handleNewBooking = () => {
     clearBooking()
@@ -76,6 +87,9 @@ export default function TicketPage() {
     return (
       <div className="max-w-2xl mx-auto text-center py-8">
         <p>กำลังตรวจสอบข้อมูล...</p>
+        <Button className="mt-4" onClick={() => router.push("/")}>
+          กลับไปหน้าหลัก
+        </Button>
       </div>
     )
   }
@@ -123,24 +137,15 @@ export default function TicketPage() {
             <p className="text-sm font-medium text-muted-foreground mb-2">ที่นั่งที่จอง</p>
             <div className="grid grid-cols-3 gap-2">
               {selectedSeats.map((seat) => {
-                // คำนวณโซนและชื่อโต๊ะ
-                let zone = "A"
-                let tableNumber = seat.tableId
-                if (seat.tableId > 20 && seat.tableId <= 40) {
-                  zone = "B"
-                  tableNumber = seat.tableId - 20
-                } else if (seat.tableId > 40) {
-                  zone = "C"
-                  tableNumber = seat.tableId - 40
-                }
+                // หาข้อมูลโต๊ะ
+                const table = tablePositions.find((t) => t.id === seat.tableId)
 
                 return (
                   <div
                     key={seat.id}
                     className="bg-primary text-primary-foreground p-2 rounded text-center font-medium text-sm"
                   >
-                    {zone}
-                    {tableNumber} ที่ {seat.seatNumber}
+                    {table?.name || `โต๊ะ ${seat.tableId}`} ที่ {seat.seatNumber}
                   </div>
                 )
               })}
@@ -151,7 +156,7 @@ export default function TicketPage() {
 
           <div className="text-center">
             <p className="text-sm text-muted-foreground">จำนวนที่นั่ง: {selectedSeats.length} ที่นั่ง</p>
-            <p className="text-2xl font-bold text-primary">ราคารวม ฿{selectedSeats.length * 150}</p>
+            <p className="text-2xl font-bold text-primary">ราคารวม ฿{calculateTotalPrice(selectedSeats)}</p>
           </div>
 
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
