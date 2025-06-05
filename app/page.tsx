@@ -136,9 +136,6 @@ export default function HomePage() {
               />
             </div>
 
-            {/* แทนที่ส่วนแสดงราคาเดิมด้วย PriceSummary */}
-            <PriceSummary selectedSeats={selectedSeats} />
-
             <Button onClick={handleBooking} className="w-full" size="lg">
               ดำเนินการจอง
             </Button>

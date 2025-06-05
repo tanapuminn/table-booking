@@ -1,5 +1,6 @@
 "use client"
 
+import axios from "axios"
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
 
 interface Seat {
@@ -22,7 +23,7 @@ export interface BookingRecord {
   seats: Array<{ tableId: number; seatNumber: number; zone: string }>
   notes?: string
   totalPrice: number
-  status: "confirmed" | "pending" | "cancelled"
+  status: "confirmed" | "cancelled"
   bookingDate: string
   paymentProof?: string | null
 }
@@ -61,6 +62,7 @@ interface BookingContextType {
   bookingHistory: BookingRecord[]
   addBookingRecord: (record: BookingRecord) => void
   updateBookingRecord: (id: string, updates: Partial<BookingRecord>) => void
+  setBookingHistory: React.Dispatch<React.SetStateAction<BookingRecord[]>>;
   zoneConfigs: ZoneConfig[]
   updateZoneConfig: (zoneId: string, updates: Partial<ZoneConfig>) => void
   tablePositions: TablePosition[]
@@ -89,336 +91,238 @@ interface BookingContextType {
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined)
 
-// ปรับปรุง initialZoneConfigs เพื่อเพิ่มราคา
-const initialZoneConfigs: ZoneConfig[] = [
-  {
-    id: "A",
-    name: "โซน VIP",
-    isActive: true,
-    description: "โซนหน้าเวที",
-    allowIndividualSeatBooking: true,
-    seatPrice: 150,
-    tablePrice: 1200,
-  },
-  {
-    id: "B",
-    name: "โซน B",
-    isActive: true,
-    description: "โซนกลางร้าน",
-    allowIndividualSeatBooking: true,
-    seatPrice: 180,
-    tablePrice: 1500,
-  },
-  {
-    id: "C",
-    name: "โซน C",
-    isActive: false,
-    description: "โซนหลังร้าน",
-    allowIndividualSeatBooking: false,
-    seatPrice: 200,
-    tablePrice: 1800,
-  },
-]
-
-// Mock data สำหรับประวัติการจอง (ปรับให้เป็น 9 ที่นั่งต่อโต๊ะ)
-const initialBookingHistory: BookingRecord[] = [
-  {
-    id: "BK001234",
-    customerName: "สมชาย ใจดี",
-    phone: "081-234-5678",
-    seats: [
-      { tableId: 1, seatNumber: 1, zone: "A" },
-      { tableId: 1, seatNumber: 2, zone: "A" },
-      { tableId: 1, seatNumber: 3, zone: "A" },
-    ],
-    notes: "ขอโต๊ะใกล้หน้าต่าง",
-    totalPrice: 450,
-    status: "confirmed",
-    bookingDate: "2024-01-15 14:30",
-    paymentProof: "/placeholder.svg?height=200&width=300",
-  },
-  {
-    id: "BK001235",
-    customerName: "สมหญิง รักดี",
-    phone: "082-345-6789",
-    seats: [
-      { tableId: 25, seatNumber: 1, zone: "B" },
-      { tableId: 25, seatNumber: 2, zone: "B" },
-    ],
-    totalPrice: 300,
-    status: "pending",
-    bookingDate: "2024-01-15 15:45",
-    paymentProof: "/placeholder.svg?height=200&width=300",
-  },
-]
-
-// เพิ่มข้อมูลโต๊ะเริ่มต้นแบบ 10x10 grid
-const initialTablePositions: TablePosition[] = [
-  // โซน A - 20 โต๊ะ
-  ...Array.from({ length: 20 }, (_, i) => ({
-    id: i + 1,
-    name: `A${i + 1}`,
-    zone: "A",
-    x: (i % 5) * 2, // เรียงเป็น 5 คอลัมน์
-    y: Math.floor(i / 5) * 2, // เรียงเป็น 4 แถว
-    isActive: true,
-    seats: Array.from({ length: 9 }, (_, seatIndex) => ({
-      seatNumber: seatIndex + 1,
-      isBooked: Math.random() > 0.8,
-    })),
-  })),
-  // โซน B - 20 โต๊ะ
-  ...Array.from({ length: 20 }, (_, i) => ({
-    id: i + 21,
-    name: `B${i + 1}`,
-    zone: "B",
-    x: (i % 5) * 2,
-    y: Math.floor(i / 5) * 2,
-    isActive: true,
-    seats: Array.from({ length: 9 }, (_, seatIndex) => ({
-      seatNumber: seatIndex + 1,
-      isBooked: Math.random() > 0.8,
-    })),
-  })),
-  // โซน C - 20 โต๊ะ
-  ...Array.from({ length: 20 }, (_, i) => ({
-    id: i + 41,
-    name: `C${i + 1}`,
-    zone: "C",
-    x: (i % 5) * 2,
-    y: Math.floor(i / 5) * 2,
-    isActive: true,
-    seats: Array.from({ length: 9 }, (_, seatIndex) => ({
-      seatNumber: seatIndex + 1,
-      isBooked: Math.random() > 0.8,
-    })),
-  })),
-]
-
 // เพิ่มฟังก์ชันคำนวณราคาใน BookingProvider
 export function BookingProvider({ children }: { children: ReactNode }) {
-  const [selectedSeats, setSelectedSeats] = useState<Seat[]>([])
-  const [bookingInfo, setBookingInfo] = useState<BookingInfo | null>(null)
-  const [paymentProof, setPaymentProof] = useState<File | null>(null)
-  const [bookingHistory, setBookingHistory] = useState<BookingRecord[]>(initialBookingHistory)
-  const [zoneConfigs, setZoneConfigs] = useState<ZoneConfig[]>(initialZoneConfigs)
-  // เพิ่มใน BookingProvider
-  const [tablePositions, setTablePositions] = useState<TablePosition[]>(initialTablePositions)
+  const [selectedSeats, setSelectedSeats] = useState<Seat[]>([]);
+  const [bookingInfo, setBookingInfo] = useState<BookingInfo | null>(null);
+  const [paymentProof, setPaymentProof] = useState<File | null>(null);
+  const [bookingHistory, setBookingHistory] = useState<BookingRecord[]>([]);
+  const [zoneConfigs, setZoneConfigs] = useState<ZoneConfig[]>([]);
+  const [tablePositions, setTablePositions] = useState<TablePosition[]>([]);
 
-  // โหลดข้อมูลจาก localStorage เมื่อ component mount
+  // ดึงข้อมูลจาก API เมื่อ component mount
   useEffect(() => {
-    try {
-      const savedBookings = localStorage.getItem("bookingHistory")
-      if (savedBookings) {
-        setBookingHistory(JSON.parse(savedBookings))
+    const fetchData = async () => {
+      try {
+        const [bookingsRes, zonesRes, tablesRes] = await Promise.all([
+          axios.get("http://localhost:8080/api/bookings"),
+          axios.get("http://localhost:8080/api/zones"),
+          axios.get("http://localhost:8080/api/tables"),
+        ]);
+
+        setBookingHistory(bookingsRes.data);
+        setZoneConfigs(zonesRes.data);
+        setTablePositions(tablesRes.data);
+      } catch (error) {
+        console.error("Error fetching initial data:", error);
       }
+    };
 
-      const savedZoneConfigs = localStorage.getItem("zoneConfigs")
-      if (savedZoneConfigs) {
-        setZoneConfigs(JSON.parse(savedZoneConfigs))
-      }
-      // เพิ่มใน useEffect สำหรับ localStorage
-      const savedTablePositions = localStorage.getItem("tablePositions")
-      if (savedTablePositions) {
-        setTablePositions(JSON.parse(savedTablePositions))
-      }
-    } catch (error) {
-      console.error("Error loading data from localStorage:", error)
-    }
-  }, [])
-
-  // บันทึกข้อมูลลง localStorage เมื่อมีการเปลี่ยนแปลง
-  useEffect(() => {
-    try {
-      localStorage.setItem("bookingHistory", JSON.stringify(bookingHistory))
-    } catch (error) {
-      console.error("Error saving booking history to localStorage:", error)
-    }
-  }, [bookingHistory])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("zoneConfigs", JSON.stringify(zoneConfigs))
-    } catch (error) {
-      console.error("Error saving zone configs to localStorage:", error)
-    }
-  }, [zoneConfigs])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("tablePositions", JSON.stringify(tablePositions))
-    } catch (error) {
-      console.error("Error saving table positions to localStorage:", error)
-    }
-  }, [tablePositions])
+    fetchData();
+  }, []);
 
   const addBookingRecord = useCallback((record: BookingRecord) => {
     setBookingHistory((prev) => {
-      const exists = prev.some((booking) => booking.id === record.id)
-      if (exists) {
-        return prev
-      }
-      return [record, ...prev]
-    })
-  }, [])
+      const exists = prev.some((booking) => booking.id === record.id);
+      if (exists) return prev;
+      return [record, ...prev];
+    });
+  }, []);
 
-  const updateBookingRecord = useCallback((id: string, updates: Partial<BookingRecord>) => {
-    setBookingHistory((prev) => prev.map((booking) => (booking.id === id ? { ...booking, ...updates } : booking)))
-  }, [])
+  const updateBookingRecord = useCallback(async (id: string, updates: Partial<BookingRecord>) => {
+    try {
+      const formData = new FormData();
+      Object.entries(updates).forEach(([key, value]) => {
+        if (key === "seats") {
+          formData.append(key, JSON.stringify(value));
+        } else if (value !== undefined) {
+          formData.append(key, value!!.toString());
+        }
+      });
 
-  // ปรับปรุงฟังก์ชัน updateZoneConfig ให้รับ updates object
-  const updateZoneConfig = useCallback((zoneId: string, updates: Partial<ZoneConfig>) => {
-    setZoneConfigs((prev) => prev.map((zone) => (zone.id === zoneId ? { ...zone, ...updates } : zone)))
-  }, [])
+      const response = await axios.put(`http://localhost:8080/api/bookings/${id}`, formData);
+      setBookingHistory((prev) =>
+        prev.map((booking) => (booking.id === id ? response.data : booking))
+      );
+    } catch (error) {
+      console.error("Error updating booking:", error);
+    }
+  }, []);
 
-  // เพิ่มฟังก์ชันจัดการโต๊ะ
-  const updateTablePosition = useCallback((tableId: number, x: number, y: number) => {
-    setTablePositions((prev) => prev.map((table) => (table.id === tableId ? { ...table, x, y } : table)))
-  }, [])
+  const updateZoneConfig = useCallback(async (zoneId: string, updates: Partial<ZoneConfig>) => {
+    try {
+      const response = await axios.put(`http://localhost:8080/api/zones/${zoneId}`, updates);
+      setZoneConfigs((prev) =>
+        prev.map((zone) => (zone.id === zoneId ? response.data : zone))
+      );
+    } catch (error) {
+      console.error("Error updating zone config:", error);
+    }
+  }, []);
 
-  const addTable = useCallback(
-    (zone: string, x: number, y: number) => {
-      const newId = Math.max(...tablePositions.map((t) => t.id)) + 1
-      const tableNumber = tablePositions.filter((t) => t.zone === zone).length + 1
+  const updateTablePosition = useCallback(async (tableId: number, x: number, y: number) => {
+    try {
+      const response = await axios.put(`http://localhost:8080/api/tables/${tableId}`, { x, y });
+      setTablePositions((prev) =>
+        prev.map((table) => (table.id === tableId ? response.data : table))
+      );
+    } catch (error) {
+      console.error("Error updating table position:", error);
+    }
+  }, []);
 
-      const newTable: TablePosition = {
+  const addTable = useCallback(async (zone: string, x: number, y: number) => {
+    try {
+      // ดึงโต๊ะทั้งหมดเพื่อหา id สูงสุด
+      const response = await axios.get("http://localhost:8080/api/tables");
+      const allTables = response.data;
+      const maxId = allTables.length > 0 ? Math.max(...allTables.map((table: TablePosition) => table.id)) : 0;
+      const newId = maxId + 1;
+
+      // นับจำนวนโต๊ะในโซนนี้เพื่อสร้าง name (เช่น B1, B2)
+      const zoneTables = allTables.filter((table: TablePosition) => table.zone === zone);
+      const tableCountInZone = zoneTables.length + 1;
+      const newName = `${ zone }${ tableCountInZone }`; // เช่น B1, B2
+
+      // สร้าง payload สำหรับ API
+      const newTable = {
         id: newId,
-        name: `${zone}${tableNumber}`,
         zone,
+        name: newName,
         x,
         y,
-        isActive: true,
-        seats: Array.from({ length: 9 }, (_, seatIndex) => ({
-          seatNumber: seatIndex + 1,
-          isBooked: false,
-        })),
-      }
+      };
 
-      setTablePositions((prev) => [...prev, newTable])
-    },
-    [tablePositions],
-  )
+      const createResponse = await axios.post("http://localhost:8080/api/tables", newTable);
+      setTablePositions((prev) => [...prev, createResponse.data]);
 
-  const removeTable = useCallback((tableId: number) => {
-    setTablePositions((prev) => prev.filter((table) => table.id !== tableId))
-  }, [])
+      return createResponse.data; // ส่งคืนโต๊ะที่สร้างใหม่
+    } catch (error) {
+      console.error("Error adding table:", error);
+      throw (error instanceof Error ? error.message : "Failed to add table");
+    }
+  }, []);
 
-  const toggleTableActive = useCallback((tableId: number) => {
-    setTablePositions((prev) =>
-      prev.map((table) => (table.id === tableId ? { ...table, isActive: !table.isActive } : table)),
-    )
-  }, [])
+  const removeTable = useCallback(async (tableId: number) => {
+    try {
+      await axios.delete(`http://localhost:8080/api/tables/${tableId}`);
+      setTablePositions((prev) => prev.filter((table) => table.id !== tableId));
+    } catch (error) {
+      console.error("Error removing table:", error);
+    }
+  }, []);
+
+  const toggleTableActive = useCallback(async (tableId: number) => {
+    try {
+      const response = await axios.put(`http://localhost:8080/api/tables/${tableId}/toggle-active`);
+      setTablePositions((prev) =>
+        prev.map((table) => (table.id === tableId ? response.data : table))
+      );
+    } catch (error) {
+      console.error("Error toggling table active status:", error);
+    }
+  }, []);
 
   const clearBooking = useCallback(() => {
-    setSelectedSeats([])
-    setBookingInfo(null)
-    setPaymentProof(null)
-  }, [])
+    setSelectedSeats([]);
+    setBookingInfo(null);
+    setPaymentProof(null);
+  }, []);
 
-  // เพิ่มฟังก์ชันคำนวณราคา
   const calculateTotalPrice = useCallback(
     (selectedSeats: Seat[]) => {
-      // จัดกลุ่มที่นั่งตามโต๊ะและโซน
-      const tableGroups: Record<string, { zone: string; seats: Seat[] }> = {}
+      const tableGroups: Record<string, { zone: string; seats: Seat[] }> = {};
 
       selectedSeats.forEach((seat) => {
-        const table = tablePositions.find((t) => t.id === seat.tableId)
-        if (!table) return
+        const table = tablePositions.find((t) => t.id === seat.tableId);
+        if (!table) return;
 
-        const key = `${table.id}`
+        const key = `${table.id}`;
         if (!tableGroups[key]) {
           tableGroups[key] = {
             zone: table.zone,
             seats: [],
-          }
+          };
         }
-        tableGroups[key].seats.push(seat)
-      })
+        tableGroups[key].seats.push(seat);
+      });
 
-      // คำนวณราคารวม
-      let totalPrice = 0
+      let totalPrice = 0;
 
       Object.values(tableGroups).forEach((group) => {
-        const zoneConfig = zoneConfigs.find((z) => z.id === group.zone)
-        if (!zoneConfig) return
+        const zoneConfig = zoneConfigs.find((z) => z.id === group.zone);
+        if (!zoneConfig) return;
 
-        // ถ้าโซนนี้ไม่อนุญาตให้จองรายที่นั่ง หรือจำนวนที่นั่งที่เลือกครบทั้งโต๊ะ (9 ที่นั่ง)
         if (!zoneConfig.allowIndividualSeatBooking || group.seats.length === 9) {
-          totalPrice += zoneConfig.tablePrice
+          totalPrice += zoneConfig.tablePrice;
         } else {
-          // คิดราคาตามจำนวนที่นั่ง
-          totalPrice += group.seats.length * zoneConfig.seatPrice
+          totalPrice += group.seats.length * zoneConfig.seatPrice;
         }
-      })
+      });
 
-      return totalPrice
+      return totalPrice;
     },
-    [tablePositions, zoneConfigs],
-  )
+    [tablePositions, zoneConfigs]
+  );
 
-  // เพิ่มฟังก์ชันคำนวณราคาแบบละเอียดใน BookingProvider
   const calculateDetailedPrice = useCallback(
     (selectedSeats: Seat[]) => {
-      // จัดกลุ่มที่นั่งตามโต๊ะและโซน
-      const tableGroups: Record<string, { zone: string; seats: Seat[]; tableId: number }> = {}
+      const tableGroups: Record<string, { zone: string; seats: Seat[]; tableId: number }> = {};
 
       selectedSeats.forEach((seat) => {
-        const table = tablePositions.find((t) => t.id === seat.tableId)
-        if (!table) return
+        const table = tablePositions.find((t) => t.id === seat.tableId);
+        if (!table) return;
 
-        const key = `${table.id}`
+        const key = `${table.id}`;
         if (!tableGroups[key]) {
           tableGroups[key] = {
             zone: table.zone,
             seats: [],
             tableId: table.id,
-          }
+          };
         }
-        tableGroups[key].seats.push(seat)
-      })
+        tableGroups[key].seats.push(seat);
+      });
 
-      // คำนวณราคารายละเอียด
       const priceDetails: Array<{
-        tableId: number
-        tableName: string
-        zone: string
-        seatCount: number
-        isFullTable: boolean
-        originalPrice: number
-        finalPrice: number
-        discount: number
-        priceType: "seat" | "table"
-      }> = []
+        tableId: number;
+        tableName: string;
+        zone: string;
+        seatCount: number;
+        isFullTable: boolean;
+        originalPrice: number;
+        finalPrice: number;
+        discount: number;
+        priceType: "seat" | "table";
+      }> = [];
 
-      let totalOriginalPrice = 0
-      let totalFinalPrice = 0
-      let totalDiscount = 0
+      let totalOriginalPrice = 0;
+      let totalFinalPrice = 0;
+      let totalDiscount = 0;
 
       Object.values(tableGroups).forEach((group) => {
-        const zoneConfig = zoneConfigs.find((z) => z.id === group.zone)
-        const table = tablePositions.find((t) => t.id === group.tableId)
-        if (!zoneConfig || !table) return
+        const zoneConfig = zoneConfigs.find((z) => z.id === group.zone);
+        const table = tablePositions.find((t) => t.id === group.tableId);
+        if (!zoneConfig || !table) return;
 
-        const isFullTable = group.seats.length === 9
-        const allowIndividualBooking = zoneConfig.allowIndividualSeatBooking
+        const isFullTable = group.seats.length === 9;
+        const allowIndividualBooking = zoneConfig.allowIndividualSeatBooking;
 
-        let originalPrice = 0
-        let finalPrice = 0
-        let discount = 0
-        let priceType: "seat" | "table" = "seat"
+        let originalPrice = 0;
+        let finalPrice = 0;
+        let discount = 0;
+        let priceType: "seat" | "table" = "seat";
 
         if (!allowIndividualBooking || isFullTable) {
-          // จองทั้งโต๊ะ
-          originalPrice = group.seats.length * zoneConfig.seatPrice
-          finalPrice = zoneConfig.tablePrice
-          discount = originalPrice - finalPrice
-          priceType = "table"
+          originalPrice = group.seats.length * zoneConfig.seatPrice;
+          finalPrice = zoneConfig.tablePrice;
+          discount = originalPrice - finalPrice;
+          priceType = "table";
         } else {
-          // จองรายที่นั่ง
-          originalPrice = group.seats.length * zoneConfig.seatPrice
-          finalPrice = originalPrice
-          discount = 0
-          priceType = "seat"
+          originalPrice = group.seats.length * zoneConfig.seatPrice;
+          finalPrice = originalPrice;
+          discount = 0;
+          priceType = "seat";
         }
 
         priceDetails.push({
@@ -431,24 +335,23 @@ export function BookingProvider({ children }: { children: ReactNode }) {
           finalPrice,
           discount,
           priceType,
-        })
+        });
 
-        totalOriginalPrice += originalPrice
-        totalFinalPrice += finalPrice
-        totalDiscount += discount
-      })
+        totalOriginalPrice += originalPrice;
+        totalFinalPrice += finalPrice;
+        totalDiscount += discount;
+      });
 
       return {
         details: priceDetails,
         totalOriginalPrice,
         totalFinalPrice,
         totalDiscount,
-      }
+      };
     },
-    [tablePositions, zoneConfigs],
-  )
+    [tablePositions, zoneConfigs]
+  );
 
-  // เพิ่มฟังก์ชันใน return value
   return (
     <BookingContext.Provider
       value={{
@@ -462,6 +365,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         bookingHistory,
         addBookingRecord,
         updateBookingRecord,
+        setBookingHistory,
         zoneConfigs,
         updateZoneConfig,
         tablePositions,
@@ -470,12 +374,12 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         removeTable,
         toggleTableActive,
         calculateTotalPrice,
-        calculateDetailedPrice, // เพิ่มฟังก์ชันใหม่
+        calculateDetailedPrice,
       }}
     >
       {children}
     </BookingContext.Provider>
-  )
+  );
 }
 
 export function useBooking() {

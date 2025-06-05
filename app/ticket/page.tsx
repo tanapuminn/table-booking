@@ -1,97 +1,100 @@
-"use client"
+"use client";
 
-import { useEffect, useState, useRef } from "react"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
-import { CheckCircle, Download, Home } from "lucide-react"
-import { useBooking } from "@/components/booking-provider"
-import type { BookingRecord } from "@/components/booking-provider"
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { CheckCircle, Download, Home } from "lucide-react";
+import { useBooking } from "@/components/booking-provider";
+import { useToast } from "@/hooks/use-toast";
+import axios from "axios";
+
+type BookingSeat = {
+  tableId: string;
+  seatNumber: number;
+};
+
+type Booking = {
+  id: string;
+  customerName: string;
+  phone: string;
+  bookingDate: string;
+  notes?: string;
+  seats: BookingSeat[];
+  totalPrice: number;
+  paymentProof?: string;
+};
 
 export default function TicketPage() {
-  const router = useRouter()
-  const { selectedSeats, bookingInfo, clearBooking, addBookingRecord, calculateTotalPrice, tablePositions } =
-    useBooking()
-  const [bookingId] = useState(`BK${Date.now().toString().slice(-6)}`)
-  const [bookingDate] = useState(
-    new Date().toLocaleDateString("th-TH", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
-  )
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { toast } = useToast();
+  const { clearBooking, tablePositions } = useBooking();
+  const [booking, setBooking] = useState<Booking | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const hasBookingSaved = useRef(false)
+  // Get bookingId from URL query
+  const bookingId = searchParams.get("bookingId");
 
   useEffect(() => {
-    if (selectedSeats.length === 0) {
-      router.push("/")
-      return
+    if (!bookingId) {
+      toast({
+        title: "ข้อผิดพลาด",
+        description: "ไม่พบรหัสการจอง",
+        variant: "destructive",
+      });
+      router.push("/");
+      return;
     }
 
-    if (bookingInfo && selectedSeats.length > 0 && !hasBookingSaved.current) {
-      // สร้างข้อมูลการจองพร้อมข้อมูลโซน
-      const seatsWithZone = selectedSeats.map((seat) => {
-        // หาข้อมูลโต๊ะเพื่อดึงโซน
-        const table = tablePositions.find((t) => t.id === seat.tableId)
-        const zone = table ? table.zone : "A"
-
-        return {
-          tableId: seat.tableId,
-          seatNumber: seat.seatNumber,
-          zone: zone,
-        }
-      })
-
-      const totalPrice = calculateTotalPrice(selectedSeats)
-
-      const newBookingRecord: BookingRecord = {
-        id: bookingId,
-        customerName: bookingInfo.name,
-        phone: bookingInfo.phone,
-        seats: seatsWithZone,
-        notes: bookingInfo.notes || undefined,
-        totalPrice: totalPrice,
-        status: "confirmed",
-        bookingDate: bookingDate,
-        paymentProof: "/placeholder.svg?height=200&width=300",
+    const fetchBooking = async () => {
+      try {
+        const response = await axios.get(`http://localhost:8080/api/bookings/${bookingId}`);
+        setBooking(response.data);
+      } catch (error) {
+        toast({
+          title: "ข้อผิดพลาด",
+          description: `ไม่สามารถดึงข้อมูลการจองได้: ${error instanceof Error ? error.message : "ไม่ทราบสาเหตุ"}`,
+          variant: "destructive",
+        });
+        router.push("/");
+      } finally {
+        setIsLoading(false);
       }
+    };
 
-      addBookingRecord(newBookingRecord)
-      hasBookingSaved.current = true
-    }
-  }, [
-    selectedSeats,
-    bookingInfo,
-    router,
-    bookingId,
-    bookingDate,
-    addBookingRecord,
-    tablePositions,
-    calculateTotalPrice,
-  ])
+    fetchBooking();
+  }, [bookingId, router, toast]);
 
   const handleNewBooking = () => {
-    clearBooking()
-    router.push("/")
-  }
+    clearBooking();
+    router.push("/");
+  };
 
   const handleDownloadTicket = () => {
-    alert("ฟีเจอร์ดาวน์โหลดตั๋วจะพร้อมใช้งานเร็วๆ นี้")
-  }
+    // Placeholder for PDF/image download
+    alert("ฟีเจอร์ดาวน์โหลดตั๋วจะพร้อมใช้งานเร็วๆ นี้");
+    // TODO: Implement PDF generation (e.g., using jsPDF)
+  };
 
-  if (selectedSeats.length === 0) {
+  if (isLoading) {
     return (
       <div className="max-w-2xl mx-auto text-center py-8">
-        <p>กำลังตรวจสอบข้อมูล...</p>
+        <p>กำลังโหลดข้อมูล...</p>
+      </div>
+    );
+  }
+
+  if (!booking) {
+    return (
+      <div className="max-w-2xl mx-auto text-center py-8">
+        <p>ไม่พบข้อมูลการจอง</p>
         <Button className="mt-4" onClick={() => router.push("/")}>
           กลับไปหน้าหลัก
         </Button>
       </div>
-    )
+    );
   }
 
   return (
@@ -105,29 +108,37 @@ export default function TicketPage() {
       <Card className="border-2 border-green-200">
         <CardHeader className="bg-green-50">
           <CardTitle className="text-center text-2xl">ตั๋วจองโต๊ะ</CardTitle>
-          <p className="text-center text-lg font-mono">{bookingId}</p>
+          <p className="text-center text-lg font-mono">{booking.id}</p>
         </CardHeader>
         <CardContent className="space-y-4 pt-6">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-sm font-medium text-muted-foreground">ชื่อผู้จอง</p>
-              <p className="text-lg font-medium">{bookingInfo?.name}</p>
+              <p className="text-lg font-medium">{booking.customerName}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">เบอร์โทรศัพท์</p>
-              <p className="text-lg font-medium">{bookingInfo?.phone}</p>
+              <p className="text-lg font-medium">{booking.phone}</p>
             </div>
           </div>
 
           <div>
             <p className="text-sm font-medium text-muted-foreground">วันที่จอง</p>
-            <p className="text-lg font-medium">{bookingDate}</p>
+            <p className="text-lg font-medium">
+              {new Date(booking.bookingDate).toLocaleDateString("th-TH", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </p>
           </div>
 
-          {bookingInfo?.notes && (
+          {booking.notes && (
             <div>
               <p className="text-sm font-medium text-muted-foreground">หมายเหตุ</p>
-              <p className="text-lg">{bookingInfo.notes}</p>
+              <p className="text-lg">{booking.notes}</p>
             </div>
           )}
 
@@ -136,18 +147,16 @@ export default function TicketPage() {
           <div>
             <p className="text-sm font-medium text-muted-foreground mb-2">ที่นั่งที่จอง</p>
             <div className="grid grid-cols-3 gap-2">
-              {selectedSeats.map((seat) => {
-                // หาข้อมูลโต๊ะ
-                const table = tablePositions.find((t) => t.id === seat.tableId)
-
+              {booking.seats.map((seat, index) => {
+                const table = tablePositions.find((t) => String(t.id) === String(seat.tableId));
                 return (
                   <div
-                    key={seat.id}
+                    key={index}
                     className="bg-primary text-primary-foreground p-2 rounded text-center font-medium text-sm"
                   >
                     {table?.name || `โต๊ะ ${seat.tableId}`} ที่ {seat.seatNumber}
                   </div>
-                )
+                );
               })}
             </div>
           </div>
@@ -155,9 +164,20 @@ export default function TicketPage() {
           <Separator />
 
           <div className="text-center">
-            <p className="text-sm text-muted-foreground">จำนวนที่นั่ง: {selectedSeats.length} ที่นั่ง</p>
-            <p className="text-2xl font-bold text-primary">ราคารวม ฿{calculateTotalPrice(selectedSeats)}</p>
+            <p className="text-sm text-muted-foreground">จำนวนที่นั่ง: {booking.seats.length} ที่นั่ง</p>
+            <p className="text-2xl font-bold text-primary">ราคารวม ฿{booking.totalPrice}</p>
           </div>
+
+          {booking.paymentProof && (
+            <div>
+              <p className="text-sm font-medium text-muted-foreground mb-2">หลักฐานการชำระเงิน</p>
+              <img
+                src={`http://localhost:8080/${booking.paymentProof}`}
+                alt="Payment proof"
+                className="w-full h-48 object-cover rounded-lg"
+              />
+            </div>
+          )}
 
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <p className="text-sm text-yellow-800">
@@ -178,5 +198,5 @@ export default function TicketPage() {
         </Button>
       </div>
     </div>
-  )
+  );
 }

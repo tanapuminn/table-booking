@@ -1,108 +1,167 @@
-"use client"
+"use client";
 
-import type React from "react"
-
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Upload, CreditCard, QrCode, FileText } from "lucide-react"
-import { useBooking } from "@/components/booking-provider"
-import { useToast } from "@/hooks/use-toast"
-import { PriceSummary } from "@/components/price-summary"
-import { PaymentQRCode } from "@/components/payment-qr-code"
+import type React from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Upload, CreditCard, QrCode, FileText } from "lucide-react";
+import { useBooking } from "@/components/booking-provider";
+import { useToast } from "@/hooks/use-toast";
+import { PriceSummary } from "@/components/price-summary";
+import { PaymentQRCode } from "@/components/payment-qr-code";
+import axios from "axios";
 
 export default function PaymentPage() {
-  const router = useRouter()
-  const { selectedSeats, bookingInfo, setPaymentProof, calculateTotalPrice, tablePositions, zoneConfigs } = useBooking()
-  const { toast } = useToast()
-  const [paymentImage, setPaymentImage] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [totalPrice, setTotalPrice] = useState(0)
-  const [paymentMethod, setPaymentMethod] = useState<"qrcode" | "upload">("qrcode")
+  const router = useRouter();
+  const { toast } = useToast();
+  const { selectedSeats, bookingInfo, setPaymentProof, calculateTotalPrice, tablePositions, zoneConfigs, addBookingRecord, clearBooking } = useBooking();
+  const [paymentImage, setPaymentImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [totalPrice, setTotalPrice] = useState(0);
+  const [paymentMethod, setPaymentMethod] = useState<"qrcode" | "upload">("qrcode");
 
   // คำนวณราคารวมเมื่อ component โหลด
   useEffect(() => {
-    if (selectedSeats.length === 0) {
-      router.push("/")
-      return
+    if (selectedSeats.length === 0 || !bookingInfo) {
+      router.push("/");
+      return;
     }
 
     try {
-      // คำนวณราคารวม
-      const price = calculateTotalPrice(selectedSeats)
-      setTotalPrice(price)
+      const price = calculateTotalPrice(selectedSeats);
+      setTotalPrice(price);
     } catch (error) {
-      console.error("Error calculating price:", error)
+      console.error("Error calculating price:", error);
       toast({
         title: "เกิดข้อผิดพลาด",
         description: "ไม่สามารถคำนวณราคาได้ กรุณาลองใหม่อีกครั้ง",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }, [selectedSeats, calculateTotalPrice, router, toast])
+  }, [selectedSeats, bookingInfo, calculateTotalPrice, router, toast]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+    const file = e.target.files?.[0];
     if (file) {
-      setPaymentImage(file)
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string)
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "ข้อผิดพลาด",
+          description: "ไฟล์มีขนาดใหญ่เกิน 5MB",
+          variant: "destructive",
+        });
+        return;
       }
-      reader.readAsDataURL(file)
+      if (!file.type.match(/image\/(jpeg|png)/)) {
+        toast({
+          title: "ข้อผิดพลาด",
+          description: "กรุณาอัปโหลดไฟล์ JPG หรือ PNG เท่านั้น",
+          variant: "destructive",
+        });
+        return;
+      }
+      setPaymentImage(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
     }
-  }
+  };
 
-  const handleConfirmPayment = () => {
+  const handleConfirmPayment = async () => {
+    if (!bookingInfo) {
+      toast({
+        title: "ข้อผิดพลาด",
+        description: "ไม่พบข้อมูลผู้จอง",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (paymentMethod === "upload" && !paymentImage) {
       toast({
-        title: "กรุณาอัพโหลดหลักฐานการชำระเงิน",
-        description: "โปรดอัพโหลดรูปภาพหลักฐานการชำระเงิน",
+        title: "กรุณาอัปโหลดหลักฐานการชำระเงิน",
+        description: "โปรดอัปโหลดรูปภาพหลักฐานการชำระเงิน",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
-    if (paymentMethod === "upload") {
-      setPaymentProof(paymentImage)
-    } else {
-      // ในกรณีใช้ QR Code ให้ใช้ placeholder สำหรับหลักฐานการชำระเงิน
-      // ในระบบจริงอาจจะต้องรอการยืนยันจากระบบธนาคาร
-      const placeholderProof = new File([new Blob([""], { type: "image/png" })], "qr-payment-proof.png", {
-        type: "image/png",
-      })
-      setPaymentProof(placeholderProof)
+    try {
+      const formData = new FormData();
+      formData.append("customerName", bookingInfo.name);
+      formData.append("phone", bookingInfo.phone);
+      formData.append("seats", JSON.stringify(selectedSeats.map(seat => ({
+        tableId: seat.tableId,
+        seatNumber: seat.seatNumber,
+        zone: tablePositions.find(t => t.id === seat.tableId)?.zone || "",
+      }))));
+      formData.append("notes", bookingInfo.notes || "");
+      formData.append("totalPrice", totalPrice.toString());
+      formData.append("bookingDate", new Date().toISOString());
+      formData.append("status", "confirmed");
+      if (paymentMethod === "upload" && paymentImage) {
+        formData.append("paymentProof", paymentImage);
+      }
+
+      const response = await axios.post("http://localhost:8080/api/bookings", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      // อัปเดต state ด้วยข้อมูลการจอง
+      addBookingRecord({
+        id: response.data.id,
+        customerName: bookingInfo.name,
+        phone: bookingInfo.phone,
+        seats: selectedSeats.map(seat => ({
+          tableId: seat.tableId,
+          seatNumber: seat.seatNumber,
+          zone: tablePositions.find(t => t.id === seat.tableId)?.zone || "",
+        })),
+        notes: bookingInfo.notes,
+        totalPrice,
+        status: "confirmed",
+        bookingDate: new Date().toISOString(),
+        paymentProof: paymentMethod === "upload" && paymentImage ? URL.createObjectURL(paymentImage) : null,
+      });
+
+      // ล้างข้อมูลการจอง
+      clearBooking();
+
+      toast({
+        title: "ยืนยันการชำระเงินสำเร็จ",
+        description: "กำลังสร้างตั๋วของคุณ...",
+      });
+
+      setTimeout(() => {
+        router.push(`/ticket?bookingId=${response.data.id}`);
+      }, 1500);
+    } catch (error) {
+      toast({
+        title: "ข้อผิดพลาด",
+        description: `ไม่สามารถสร้างการจองได้: ${error instanceof Error ? error.message : "เกิดข้อผิดพลาดไม่ทราบสาเหตุ"}`,
+        variant: "destructive",
+      });
     }
+  };
 
-    toast({
-      title: "ยืนยันการชำระเงินสำเร็จ",
-      description: "กำลังสร้างตั๋วของคุณ...",
-    })
-
-    setTimeout(() => {
-      router.push("/ticket")
-    }, 1500)
-  }
-
-  // แสดง loading state
   if (isLoading) {
     return (
       <div className="max-w-2xl mx-auto text-center py-8">
         <p>กำลังโหลดข้อมูล...</p>
       </div>
-    )
+    );
   }
 
-  // ถ้าไม่มีที่นั่งที่เลือก ให้กลับไปหน้าแรก
-  if (selectedSeats.length === 0) {
+  if (selectedSeats.length === 0 || !bookingInfo) {
     return (
       <div className="max-w-2xl mx-auto text-center py-8">
         <p>ไม่พบข้อมูลการจอง กรุณาเลือกที่นั่งก่อน</p>
@@ -110,7 +169,7 @@ export default function PaymentPage() {
           กลับไปเลือกที่นั่ง
         </Button>
       </div>
-    )
+    );
   }
 
   return (
@@ -131,15 +190,15 @@ export default function PaymentPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="text-sm font-medium">ชื่อผู้จอง</Label>
-              <p className="text-lg">{bookingInfo?.name}</p>
+              <p className="text-lg">{bookingInfo.name}</p>
             </div>
             <div>
               <Label className="text-sm font-medium">เบอร์โทรศัพท์</Label>
-              <p className="text-lg">{bookingInfo?.phone}</p>
+              <p className="text-lg">{bookingInfo.phone}</p>
             </div>
           </div>
 
-          {bookingInfo?.notes && (
+          {bookingInfo.notes && (
             <div>
               <Label className="text-sm font-medium">หมายเหตุ</Label>
               <p className="text-lg">{bookingInfo.notes}</p>
@@ -152,23 +211,20 @@ export default function PaymentPage() {
             <Label className="text-sm font-medium">ที่นั่งที่จอง</Label>
             <div className="mt-2 space-y-2">
               {selectedSeats.map((seat) => {
-                // หาข้อมูลโต๊ะ
-                const tablePosition = tablePositions.find((t) => t.id === seat.tableId)
-
+                const tablePosition = tablePositions.find((t) => t.id === seat.tableId);
                 return (
                   <div key={seat.id} className="flex justify-between items-center p-2 bg-muted rounded">
                     <span>
                       {tablePosition?.name || `โต๊ะ ${seat.tableId}`} ที่นั่ง {seat.seatNumber}
                     </span>
                   </div>
-                )
+                );
               })}
             </div>
           </div>
 
           <Separator />
 
-          {/* แสดงสรุปราคา */}
           <PriceSummary selectedSeats={selectedSeats} />
         </CardContent>
       </Card>
@@ -211,7 +267,7 @@ export default function PaymentPage() {
                 <Input
                   id="payment-image"
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png"
                   onChange={handleImageUpload}
                   className="hidden"
                 />
@@ -234,9 +290,9 @@ export default function PaymentPage() {
         </TabsContent>
       </Tabs>
 
-      <Button onClick={handleConfirmPayment} className="w-full" size="lg">
+      <Button onClick={handleConfirmPayment} className="w-full" size="lg" disabled={isLoading}>
         ยืนยันการชำระเงิน
       </Button>
     </div>
-  )
+  );
 }
