@@ -22,12 +22,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Edit, Trash2, Eye, Search, Settings, Home, Plus } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Edit, Trash2, Eye, Search, Settings, Home, Plus, Ticket } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useBooking, type BookingRecord } from "@/components/booking-provider";
 import { TableLayoutEditor } from "@/components/table-layout-editor";
 import { useRouter } from "next/navigation";
 import axios from "axios";
+
+const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
 
 export default function DashboardPage() {
   const { toast } = useToast();
@@ -45,17 +54,35 @@ export default function DashboardPage() {
   });
   const [isAddZoneOpen, setIsAddZoneOpen] = useState(false);
 
-  const filteredBookings = bookingHistory.filter(
-    (booking) =>
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  // const filteredBookings = bookingHistory.filter(
+  //   (booking) =>
+  //     booking.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  //     booking.phone.includes(searchTerm) ||
+  //     booking.id.toLowerCase().includes(searchTerm.toLowerCase()),
+  // );
+  const filteredBookings = bookingHistory.filter((booking) => {
+    const matchesSearch =
       booking.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       booking.phone.includes(searchTerm) ||
-      booking.id.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+      booking.id.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesStatus =
+      statusFilter === "all" || booking.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
+
+
+
 
   const handleChangeStatus = async (bookingId: string, newStatus: "confirmed" | "cancelled") => {
     try {
+      const confirmDelete = window.confirm("คุณแน่ใจหรือไม่ว่าต้องการยกเลิกการจองนี้?");
+      if (!confirmDelete) return;
       // เรียก API เพื่ออัปเดตสถานะ
-      await axios.patch(`http://localhost:8080/api/bookings/${bookingId}`, { status: newStatus });
+      await axios.patch(`${baseURL}/api/bookings/${bookingId}`, { status: newStatus });
 
       // อัปเดต bookingHistory ใน BookingProvider
       // updateBookingRecord(bookingId, { status: newStatus });
@@ -125,7 +152,7 @@ export default function DashboardPage() {
         return;
       }
 
-      await axios.post("http://localhost:8080/api/zones", {
+      await axios.post(`${baseURL}/api/zones`, {
         id: newZone.id,
         name: newZone.name,
         description: newZone.description,
@@ -168,7 +195,7 @@ export default function DashboardPage() {
 
   const handleDeleteZone = async (zoneId: string) => {
     try {
-      await axios.delete(`http://localhost:8080/api/zones/${zoneId}`);
+      await axios.delete(`${baseURL}/api/zones/${zoneId}`);
       updateZoneConfig(zoneId, { isActive: false }); // อัปเดต state ให้โซนถูกปิด
       toast({
         title: "ลบโซนสำเร็จ",
@@ -225,6 +252,32 @@ export default function DashboardPage() {
 
   const zoneStats = getZoneStats();
 
+  const handleOpenTicket = (bookingId: string) => {
+    router.push(`/ticket?bookingId=${bookingId}`);
+  }
+
+  const handleDeleteBooking = async (bookingId: string) => {
+    try {
+      const confirmDelete = window.confirm("คุณแน่ใจหรือไม่ว่าต้องการลบการจองนี้?");
+      if (!confirmDelete) return;
+
+      await axios.delete(`${baseURL}/api/bookings/${bookingId}`);
+
+      toast({
+        title: "ลบการจองเรียบร้อยแล้ว",
+      });
+
+      // router.refresh(); // รีเฟรชหน้าเพื่ออัปเดตข้อมูลการจอง
+      setBookingHistory((prev) => prev.filter((booking) => booking.id !== bookingId));
+    } catch (error) {
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: `ไม่สามารถลบการจองได้: ${error instanceof Error ? error.message : "ไม่ทราบสาเหตุ"}`,
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -247,17 +300,35 @@ export default function DashboardPage() {
           <TabsTrigger value="layout">จัดการตำแหน่งโต๊ะ</TabsTrigger>
         </TabsList>
 
+
+        {/* จัดการการจอง */}
         <TabsContent value="bookings" className="space-y-6">
-          <div className="flex items-center space-x-2">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="ค้นหาด้วยชื่อ, เบอร์โทร หรือรหัสการจอง..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-md"
-            />
+          <div className="flex flex-col md:flex-row md:items-center md:space-x-4 space-y-2 md:space-y-0">
+            <div className="flex items-center space-x-2">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="ค้นหาด้วยชื่อ, เบอร์โทร หรือรหัสการจอง..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="max-w-md"
+              />
+            </div>
+
+            <div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="เลือกสถานะการจอง" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">สถานะทั้งหมด</SelectItem>
+                  <SelectItem value="confirmed">ยืนยันแล้ว</SelectItem>
+                  <SelectItem value="cancelled">ยกเลิกแล้ว</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
+          {/* ประวัติการจอง */}
           <div className="grid gap-4">
             {filteredBookings.map((booking) => (
               <Card key={booking.id}>
@@ -286,7 +357,7 @@ export default function DashboardPage() {
                             </DialogHeader>
                             <div className="mt-4">
                               <img
-                                src={booking.paymentProof || "/placeholder.svg"}
+                                src={`${baseURL}/${booking.paymentProof}` || "/placeholder.svg"}
                                 alt="Payment proof"
                                 className="w-full rounded-lg"
                               />
@@ -294,6 +365,14 @@ export default function DashboardPage() {
                           </DialogContent>
                         </Dialog>
                       )}
+
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm" onClick={() => handleOpenTicket(booking.id)}>
+                            <Ticket className="h-4 w-4" />
+                          </Button>
+                        </DialogTrigger>
+                      </Dialog>
 
                       <Dialog>
                         <DialogTrigger asChild>
@@ -331,10 +410,15 @@ export default function DashboardPage() {
                             <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
                             {booking.status !== "confirmed" && (
                               <AlertDialogAction
-                                onClick={() => handleChangeStatus(booking.id, "confirmed")}
+                                onClick={() => handleDeleteBooking(booking.id)}
                               >
-                                ยืนยันการจอง
+                                ลบ
                               </AlertDialogAction>
+                              // <AlertDialogAction
+                              //   onClick={() => handleChangeStatus(booking.id, "confirmed")}
+                              // >
+                              //   ยืนยันการจอง
+                              // </AlertDialogAction>
                             )}
                             {booking.status !== "cancelled" && (
                               <AlertDialogAction
@@ -393,6 +477,7 @@ export default function DashboardPage() {
           }
         </TabsContent >
 
+        {/* จัดการโซน */}
         <TabsContent value="zones" className="space-y-6">
           <div className="flex justify-end">
             <Dialog open={isAddZoneOpen} onOpenChange={setIsAddZoneOpen}>
@@ -640,6 +725,7 @@ export default function DashboardPage() {
           </Card>
         </TabsContent>
 
+        {/* จัดการตำแหน่งโต๊ะ */}
         <TabsContent value="layout" className="space-y-6">
           <TableLayoutEditor />
         </TabsContent>

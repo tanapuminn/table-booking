@@ -1,21 +1,24 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, use } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { QrCode, Download, Copy, Check } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import axios from "axios"
 
 interface PaymentQRCodeProps {
   amount: number
   recipientName?: string
 }
 
-export function PaymentQRCode({ amount, recipientName = "ระบบจองโต๊ะจีน" }: PaymentQRCodeProps) {
+export function PaymentQRCode({ amount, recipientName = "PRASANMIT" }: PaymentQRCodeProps) {
   const { toast } = useToast()
   const [copied, setCopied] = useState(false)
   const [qrSize, setQrSize] = useState(220)
+  const [qrCode, setQrCode] = useState("");
+  let promptpay = '0805912700';
 
   // ปรับขนาด QR Code ตามขนาดหน้าจอ
   useEffect(() => {
@@ -44,8 +47,29 @@ export function PaymentQRCode({ amount, recipientName = "ระบบจอง�
     return `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}x${qrSize}&data=promptpay:${promptpayNumber}|${amount.toFixed(2)}&format=svg`
   }
 
+
+
+  const handleCreateQR = async (amount: number) => {
+    const promptpay = '0805912700';
+    const response = await axios.get(`https://promptpay.io/${promptpay}/${amount}`);
+    // const response = await axios.get(`https://www.pp-qr.com/api/${promptpay}/${amount}`);
+    console.log('response', response);
+
+    if (response.status === 200) {
+      // return response.data.qrImage;
+      setQrCode(response.data.qrImage);
+    } else {
+      alert(response.data.error);
+    }
+  }
+
+  // useEffect(() => {
+  //   // เรียกใช้ฟังก์ชันสร้าง QR Code เมื่อ component ถูก mount
+  //   handleCreateQR(amount);
+  // }, [amount]);
+
   const handleCopyPromptPay = () => {
-    navigator.clipboard.writeText("0899999999").then(() => {
+    navigator.clipboard.writeText("0805912700").then(() => {
       setCopied(true)
       toast({
         title: "คัดลอกเบอร์ PromptPay แล้ว",
@@ -57,7 +81,9 @@ export function PaymentQRCode({ amount, recipientName = "ระบบจอง�
 
   const handleDownloadQR = () => {
     const link = document.createElement("a")
-    link.href = generateQRCodeURL(amount)
+    // link.href = qrCode
+    // link.href = generateQRCodeURL(amount)
+    link.href = `https://promptpay.io/${promptpay}/${amount}`
     link.download = `promptpay-${amount}.png`
     document.body.appendChild(link)
     link.click()
@@ -84,8 +110,17 @@ export function PaymentQRCode({ amount, recipientName = "ระบบจอง�
         </div>
 
         <div className="bg-white p-3 rounded-lg shadow-sm border">
+          {/* <img 
+            src={`https://www.pp-qr.com/api/image/${promptpay}/${amount}`}
+            alt={`QR Code สำหรับชำระเงิน ${amount} บาท`}
+            className="mx-auto"
+            width={qrSize}
+            height={qrSize}
+          /> */}
           <img
-            src={generateQRCodeURL(amount) || "/placeholder.svg"}
+            // src={generateQRCodeURL(amount) || "/placeholder.svg"}
+            // src={qrCode || "/placeholder.svg"}
+            src={`https://promptpay.io/${promptpay}/${amount}.png`}
             alt={`QR Code สำหรับชำระเงิน ${amount} บาท`}
             className="mx-auto"
             width={qrSize}
@@ -96,7 +131,7 @@ export function PaymentQRCode({ amount, recipientName = "ระบบจอง�
         <div className="text-center space-y-1">
           <p className="font-medium">{recipientName}</p>
           <div className="flex items-center justify-center gap-2">
-            <p className="text-muted-foreground">089-999-9999</p>
+            <p className="text-muted-foreground">{promptpay}</p>
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopyPromptPay}>
               {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
             </Button>
@@ -107,10 +142,10 @@ export function PaymentQRCode({ amount, recipientName = "ระบบจอง�
 
         <div className="text-center space-y-2 w-full">
           <p className="text-sm text-muted-foreground">สแกน QR Code ด้านบนด้วยแอปธนาคารหรือแอปที่รองรับ PromptPay</p>
-          <Button variant="outline" size="sm" className="w-full flex items-center gap-2" onClick={handleDownloadQR}>
+          {/* <Button variant="outline" size="sm" className="w-full flex items-center gap-2" onClick={handleDownloadQR}>
             <Download className="h-4 w-4" />
             ดาวน์โหลด QR Code
-          </Button>
+          </Button> */}
         </div>
       </CardContent>
     </Card>

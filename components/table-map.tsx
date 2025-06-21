@@ -14,6 +14,8 @@ import { Info, InfoIcon as InfoCircle, Lock } from "lucide-react"
 import { PriceSummary } from "./price-summary"
 import axios from "axios"
 
+const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
+
 interface Seat {
   id: string
   tableId: number
@@ -55,7 +57,7 @@ export function TableMap() {
     const fetchBookings = async () => {
       try {
         setIsLoading(true)
-        const response = await axios.get("http://localhost:8080/api/bookings")
+        const response = await axios.get(`${baseURL}/api/bookings`)
         setBookings(response.data.filter((booking: BookingRecord) => booking.status === "confirmed"))
         setError(null)
       } catch (err) {
@@ -285,7 +287,7 @@ export function TableMap() {
                 {/* โต๊ะวงกลม */}
                 <button
                   className={cn(
-                    "w-24 h-24 rounded-full flex flex-col items-center justify-center shadow-lg border-4 transition-all relative",
+                    "w-20 h-20 rounded-full flex flex-col items-center justify-center shadow-lg border-4 transition-all relative",
                     getTableColor(table),
                     isFull ? "cursor-not-allowed" : "hover:scale-105",
                   )}

@@ -3,6 +3,8 @@
 import axios from "axios"
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
 
+const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
+
 interface Seat {
   id: string
   tableId: number
@@ -105,9 +107,9 @@ export function BookingProvider({ children }: { children: ReactNode }) {
     const fetchData = async () => {
       try {
         const [bookingsRes, zonesRes, tablesRes] = await Promise.all([
-          axios.get("http://localhost:8080/api/bookings"),
-          axios.get("http://localhost:8080/api/zones"),
-          axios.get("http://localhost:8080/api/tables"),
+          axios.get(`${baseURL}/api/bookings`),
+          axios.get(`${baseURL}/api/zones`),
+          axios.get(`${baseURL}/api/tables`),
         ]);
 
         setBookingHistory(bookingsRes.data);
@@ -129,29 +131,88 @@ export function BookingProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // ฟังก์ชันช่วยสำหรับตรวจสอบข้อมูลก่อนส่ง
+  const validateBookingUpdates = (updates: Partial<BookingRecord>): boolean => {
+    // ตรวจสอบข้อมูลที่สำคัญ
+    if (updates.customerName !== undefined && (!updates.customerName || updates.customerName.trim() === '')) {
+      console.error('Customer name cannot be empty');
+      return false;
+    }
+
+    if (updates.phone !== undefined && (!updates.phone || updates.phone.trim() === '')) {
+      console.error('Phone cannot be empty');
+      return false;
+    }
+
+    if (updates.seats !== undefined && (!Array.isArray(updates.seats) || updates.seats.length === 0)) {
+      console.error('Seats must be a non-empty array');
+      return false;
+    }
+
+    return true;
+  };
+
+  // ฟังก์ชันที่ปรับปรุงแล้วพร้อมการตรวจสอบ
   const updateBookingRecord = useCallback(async (id: string, updates: Partial<BookingRecord>) => {
     try {
-      const formData = new FormData();
-      Object.entries(updates).forEach(([key, value]) => {
-        if (key === "seats") {
-          formData.append(key, JSON.stringify(value));
-        } else if (value !== undefined) {
-          formData.append(key, value!!.toString());
+      // ตรวจสอบข้อมูลก่อนส่ง
+      if (!validateBookingUpdates(updates)) {
+        throw new Error('Invalid booking data');
+      }
+
+      // ใช้ JSON แทน FormData เพื่อความง่าย
+      const cleanUpdates = Object.entries(updates).reduce((acc, [key, value]) => {
+        if (value !== undefined && value !== null) {
+          acc[key] = value;
         }
+        return acc;
+      }, {} as Record<string, any>);
+
+      console.log('Sending updates:', cleanUpdates); // debug log
+
+      const response = await axios.put(`${baseURL}/api/bookings/${id}`, cleanUpdates, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
 
-      const response = await axios.put(`http://localhost:8080/api/bookings/${id}`, formData);
       setBookingHistory((prev) =>
         prev.map((booking) => (booking.id === id ? response.data : booking))
       );
+
+      return response.data;
     } catch (error) {
       console.error("Error updating booking:", error);
+      if (axios.isAxiosError(error)) {
+        console.error("Server response:", error.response?.data);
+      }
+      throw error;
     }
   }, []);
 
+  // const updateBookingRecordOLD = useCallback(async (id: string, updates: Partial<BookingRecord>) => {
+  //   try {
+  //     const formData = new FormData();
+  //     Object.entries(updates).forEach(([key, value]) => {
+  //       if (key === "seats") {
+  //         formData.append(key, JSON.stringify(value));
+  //       } else if (value !== undefined) {
+  //         formData.append(key, value!!.toString());
+  //       }
+  //     });
+
+  //     const response = await axios.put(`${baseURL}/api/bookings/${id}`, formData);
+  //     setBookingHistory((prev) =>
+  //       prev.map((booking) => (booking.id === id ? response.data : booking))
+  //     );
+  //   } catch (error) {
+  //     console.error("Error updating booking:", error);
+  //   }
+  // }, []);
+
   const updateZoneConfig = useCallback(async (zoneId: string, updates: Partial<ZoneConfig>) => {
     try {
-      const response = await axios.put(`http://localhost:8080/api/zones/${zoneId}`, updates);
+      const response = await axios.put(`${baseURL}/api/zones/${zoneId}`, updates);
       setZoneConfigs((prev) =>
         prev.map((zone) => (zone.id === zoneId ? response.data : zone))
       );
@@ -162,7 +223,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
 
   const updateTablePosition = useCallback(async (tableId: number, x: number, y: number) => {
     try {
-      const response = await axios.put(`http://localhost:8080/api/tables/${tableId}`, { x, y });
+      const response = await axios.put(`${baseURL}/api/tables/${tableId}`, { x, y });
       setTablePositions((prev) =>
         prev.map((table) => (table.id === tableId ? response.data : table))
       );
@@ -174,7 +235,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
   const addTable = useCallback(async (zone: string, x: number, y: number) => {
     try {
       // ดึงโต๊ะทั้งหมดเพื่อหา id สูงสุด
-      const response = await axios.get("http://localhost:8080/api/tables");
+      const response = await axios.get(`${baseURL}/api/tables`);
       const allTables = response.data;
       const maxId = allTables.length > 0 ? Math.max(...allTables.map((table: TablePosition) => table.id)) : 0;
       const newId = maxId + 1;
@@ -182,7 +243,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
       // นับจำนวนโต๊ะในโซนนี้เพื่อสร้าง name (เช่น B1, B2)
       const zoneTables = allTables.filter((table: TablePosition) => table.zone === zone);
       const tableCountInZone = zoneTables.length + 1;
-      const newName = `${ zone }${ tableCountInZone }`; // เช่น B1, B2
+      const newName = `${zone}${tableCountInZone}`; // เช่น B1, B2
 
       // สร้าง payload สำหรับ API
       const newTable = {
@@ -193,7 +254,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         y,
       };
 
-      const createResponse = await axios.post("http://localhost:8080/api/tables", newTable);
+      const createResponse = await axios.post(`${baseURL}/api/tables`, newTable);
       setTablePositions((prev) => [...prev, createResponse.data]);
 
       return createResponse.data; // ส่งคืนโต๊ะที่สร้างใหม่
@@ -205,7 +266,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
 
   const removeTable = useCallback(async (tableId: number) => {
     try {
-      await axios.delete(`http://localhost:8080/api/tables/${tableId}`);
+      await axios.delete(`${baseURL}/api/tables/${tableId}`);
       setTablePositions((prev) => prev.filter((table) => table.id !== tableId));
     } catch (error) {
       console.error("Error removing table:", error);
@@ -214,7 +275,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
 
   const toggleTableActive = useCallback(async (tableId: number) => {
     try {
-      const response = await axios.put(`http://localhost:8080/api/tables/${tableId}/toggle-active`);
+      const response = await axios.put(`${baseURL}/api/tables/${tableId}/toggle-active`);
       setTablePositions((prev) =>
         prev.map((table) => (table.id === tableId ? response.data : table))
       );

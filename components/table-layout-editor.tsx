@@ -79,10 +79,10 @@ export function TableLayoutEditor() {
     }
 
     try {
-    const newTable = await addTable(selectedZone, x, y);
+    await addTable(selectedZone, x, y);
     toast({
       title: "เพิ่มโต๊ะสำเร็จ",
-      description: `เพิ่มโต๊ะ ${newTable} ในโซน ${selectedZone} ที่ตำแหน่ง (${x}, ${y})`,
+      description: `เพิ่มโต๊ะในโซน ${selectedZone} ที่ตำแหน่ง (${x}, ${y})`,
     });
   } catch (error) {
     toast({

@@ -10,6 +10,8 @@ import { useBooking } from "@/components/booking-provider";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
 
+const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
+
 type BookingSeat = {
   tableId: string;
   seatNumber: number;
@@ -50,7 +52,7 @@ export default function TicketPage() {
 
     const fetchBooking = async () => {
       try {
-        const response = await axios.get(`http://localhost:8080/api/bookings/${bookingId}`);
+        const response = await axios.get(`${baseURL}/api/bookings/${bookingId}`);
         setBooking(response.data);
       } catch (error) {
         toast({
@@ -172,7 +174,7 @@ export default function TicketPage() {
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-2">หลักฐานการชำระเงิน</p>
               <img
-                src={`http://localhost:8080/${booking.paymentProof}`}
+                src={`${baseURL}/${booking.paymentProof}`}
                 alt="Payment proof"
                 className="w-full h-48 object-cover rounded-lg"
               />
@@ -181,17 +183,17 @@ export default function TicketPage() {
 
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <p className="text-sm text-yellow-800">
-              <strong>หมายเหตุ:</strong> กรุณานำตั๋วนี้มาแสดงเมื่อมาใช้บริการ และมาถึงก่อนเวลา 15 นาที
+              <strong>หมายเหตุ:</strong> กรุณาบันทึกภาพตั๋วนี้ไว้เป็นหลักฐานการจอง
             </p>
           </div>
         </CardContent>
       </Card>
 
       <div className="flex gap-4">
-        <Button onClick={handleDownloadTicket} variant="outline" className="flex-1">
+        {/* <Button onClick={handleDownloadTicket} variant="outline" className="flex-1">
           <Download className="h-4 w-4 mr-2" />
           ดาวน์โหลดตั๋ว
-        </Button>
+        </Button> */}
         <Button onClick={handleNewBooking} className="flex-1">
           <Home className="h-4 w-4 mr-2" />
           จองใหม่

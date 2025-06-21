@@ -60,7 +60,7 @@ export default function HomePage() {
   }
 
   const navigateToDashboard = () => {
-    router.push("/dashboard")
+    router.push("/psmnlp-dashboard")
   }
 
   return (

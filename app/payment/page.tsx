@@ -16,6 +16,8 @@ import { PriceSummary } from "@/components/price-summary";
 import { PaymentQRCode } from "@/components/payment-qr-code";
 import axios from "axios";
 
+const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
+
 export default function PaymentPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -86,7 +88,7 @@ export default function PaymentPage() {
       return;
     }
 
-    if (paymentMethod === "upload" && !paymentImage) {
+    if (!paymentImage) {
       toast({
         title: "กรุณาอัปโหลดหลักฐานการชำระเงิน",
         description: "โปรดอัปโหลดรูปภาพหลักฐานการชำระเงิน",
@@ -112,7 +114,7 @@ export default function PaymentPage() {
         formData.append("paymentProof", paymentImage);
       }
 
-      const response = await axios.post("http://localhost:8080/api/bookings", formData, {
+      const response = await axios.post(`${baseURL}/api/bookings`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
@@ -144,12 +146,25 @@ export default function PaymentPage() {
       setTimeout(() => {
         router.push(`/ticket?bookingId=${response.data.id}`);
       }, 1500);
-    } catch (error) {
-      toast({
-        title: "ข้อผิดพลาด",
-        description: `ไม่สามารถสร้างการจองได้: ${error instanceof Error ? error.message : "เกิดข้อผิดพลาดไม่ทราบสาเหตุ"}`,
-        variant: "destructive",
-      });
+    } catch (error: any) {
+      console.log("Error confirming payment:", error);
+      if (error.response.status === 409) {
+        toast({
+          title: "ข้อผิดพลาด",
+          description: `ที่นั่งที่เลือกมีการจองแล้ว กรุณาเลือกที่นั่งอื่น`,
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          router.push(`/`);
+          window.location.reload();
+        }, 1500);
+      } else {
+        toast({
+          title: "ข้อผิดพลาด",
+          description: `ไม่สามารถสร้างการจองได้: ${error instanceof Error ? error.message : "เกิดข้อผิดพลาดไม่ทราบสาเหตุ"}`,
+          variant: "destructive",
+        });
+      }
     }
   };
 
