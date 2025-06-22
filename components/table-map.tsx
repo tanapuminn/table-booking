@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -12,6 +12,9 @@ import { cn } from "@/lib/utils"
 import { Info, InfoIcon as InfoCircle, Lock } from "lucide-react"
 // เพิ่ม import PriceSummary
 import { PriceSummary } from "./price-summary"
+import axios from "axios"
+
+const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
 
 interface Seat {
   id: string
@@ -29,37 +32,66 @@ interface Table {
   y: number
 }
 
+interface BookingRecord {
+  id: string
+  customerName: string
+  phone: string
+  seats: Array<{ tableId: number; seatNumber: number; zone: string }>
+  notes?: string
+  totalPrice: number
+  status: "confirmed" | "cancelled"
+  bookingDate: string
+  paymentProof?: string | null
+}
+
 export function TableMap() {
-  const { selectedSeats, setSelectedSeats, zoneConfigs, tablePositions, bookingHistory } = useBooking()
+  const { selectedSeats, setSelectedSeats, zoneConfigs, tablePositions } = useBooking()
   const [selectedTable, setSelectedTable] = useState<Table | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [bookings, setBookings] = useState<BookingRecord[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // แทนที่การสร้าง tables ด้วย useMemo
+  // ดึงข้อมูลการจองจาก API
+  useEffect(() => {
+    const fetchBookings = async () => {
+      try {
+        setIsLoading(true)
+        const response = await axios.get(`${baseURL}/api/bookings`)
+        setBookings(response.data.filter((booking: BookingRecord) => booking.status === "confirmed"))
+        setError(null)
+      } catch (err) {
+        console.error("Error fetching bookings:", err)
+        setError("ไม่สามารถโหลดข้อมูลการจองได้ กรุณาลองใหม่")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchBookings()
+  }, [])
+
+  // สร้าง tables ด้วย useMemo
   const tables = useMemo(() => {
     return tablePositions.map((tablePos) => {
-      // สร้าง seats โดย sync กับข้อมูลการจองจาก bookingHistory
       const seats = tablePos.seats.map((seat) => {
-        // ตรวจสอบว่าที่นั่งนี้ถูกจองแล้วจาก bookingHistory หรือไม่
-        const isBookedFromHistory = bookingHistory
-          .filter((booking) => booking.status === "confirmed")
-          .some((booking) =>
-            booking.seats.some(
-              (bookedSeat) => bookedSeat.tableId === tablePos.id && bookedSeat.seatNumber === seat.seatNumber,
-            ),
+        // ตรวจสอบว่าที่นั่งนี้ถูกจองแล้วจาก bookings หรือไม่
+        const isBookedFromBookings = bookings.some((booking) =>
+          booking.seats.some(
+            (bookedSeat) => bookedSeat.tableId === tablePos.id && bookedSeat.seatNumber === seat.seatNumber
           )
+        )
 
         return {
-          id: `${tablePos.id}-${seat.seatNumber}`,
+          id: `${tablePos.id} -${seat.seatNumber}`,
           tableId: tablePos.id,
           seatNumber: seat.seatNumber,
-          isBooked: isBookedFromHistory, // ใช้ข้อมูลจาก bookingHistory
+          isBooked: isBookedFromBookings,
         }
       })
 
-      // ปรับปรุงการคำนวณตำแหน่ง x, y ให้มีระยะห่างระหว่างโต๊ะ
-      // ใช้ cellSize เท่ากับในหน้า table-layout-editor.tsx
       const cellSize = 60
-      const padding = 20 // เพิ่มระยะห่างระหว่างโต๊ะ
+      const padding = 20
 
       return {
         id: tablePos.id,
@@ -70,7 +102,7 @@ export function TableMap() {
         y: tablePos.y * (cellSize + padding) + 50,
       }
     })
-  }, [tablePositions, bookingHistory])
+  }, [tablePositions, bookings])
 
   // กรองโต๊ะตามโซนที่เปิดใช้งานและโต๊ะที่ active
   const activeZones = zoneConfigs.filter((zone) => zone.isActive).map((zone) => zone.id)
@@ -102,12 +134,10 @@ export function TableMap() {
   const handleSeatClick = (seat: Seat) => {
     if (seat.isBooked) return
 
-    // ตรวจสอบว่าโซนนี้อนุญาตให้จองรายที่นั่งหรือไม่
     const table = tables.find((t) => t.id === seat.tableId)
     const zoneConfig = zoneConfigs.find((z) => z.id === table?.zone)
 
     if (!zoneConfig?.allowIndividualSeatBooking) {
-      // ถ้าไม่อนุญาตให้จองรายที่นั่ง ให้เลือกทั้งโต๊ะ
       if (table) {
         handleTableSelect(table)
       }
@@ -168,16 +198,9 @@ export function TableMap() {
   }
 
   const getTableColor = (table: Table) => {
-    // ตรวจสอบว่าโต๊ะนี้มีที่นั่งที่ถูกเลือกหรือไม่
     const hasSelectedSeats = table.seats.some((seat) => selectedSeats.some((s) => s.id === seat.id))
-
-    // ตรวจสอบว่าโต๊ะนี้มีที่นั่งที่จองแล้วหรือไม่
     const hasBookedSeats = table.seats.some((seat) => seat.isBooked)
-
-    // ตรวจสอบว่าโต๊ะนี้มีที่นั่งว่างทั้งหมดหรือไม่
     const allSeatsAvailable = table.seats.every((seat) => !seat.isBooked)
-
-    // ตรวจสอบว่าโต๊ะนี้มีที่นั่งที่จองแล้วทั้งหมดหรือไม่
     const allSeatsBooked = table.seats.every((seat) => seat.isBooked)
 
     if (hasSelectedSeats) {
@@ -215,8 +238,7 @@ export function TableMap() {
 
   // ฟังก์ชันคำนวณตำแหน่งเก้าอี้รอบโต๊ะวงกลม (สำหรับ modal)
   const getSeatPosition = (seatNumber: number, tableRadius = 100) => {
-    // คำนวณมุมสำหรับแต่ละเก้าอี้ (360 องศา / 9 เก้าอี้ = 40 องศาต่อเก้าอี้)
-    const angle = ((seatNumber - 1) * 40 - 90) * (Math.PI / 180) // เริ่มจากด้านบน (-90 องศา)
+    const angle = ((seatNumber - 1) * 40 - 90) * (Math.PI / 180)
     const x = Math.cos(angle) * tableRadius
     const y = Math.sin(angle) * tableRadius
     return { x, y }
@@ -265,7 +287,7 @@ export function TableMap() {
                 {/* โต๊ะวงกลม */}
                 <button
                   className={cn(
-                    "w-24 h-24 rounded-full flex flex-col items-center justify-center shadow-lg border-4 transition-all relative",
+                    "w-20 h-20 rounded-full flex flex-col items-center justify-center shadow-lg border-4 transition-all relative",
                     getTableColor(table),
                     isFull ? "cursor-not-allowed" : "hover:scale-105",
                   )}
@@ -422,9 +444,8 @@ export function TableMap() {
                       }}
                       onClick={() => handleSeatClick(seat)}
                       disabled={seat.isBooked}
-                      title={`ที่นั่ง ${seat.seatNumber} - ${
-                        seat.isBooked ? "จองแล้ว" : status === "selected" ? "เลือกแล้ว" : "ว่าง"
-                      }${!canSelectIndividual ? " (จองทั้งโต๊ะเท่านั้น)" : ""}`}
+                      title={`ที่นั่ง ${seat.seatNumber} - ${seat.isBooked ? "จองแล้ว" : status === "selected" ? "เลือกแล้ว" : "ว่าง"
+                        }${!canSelectIndividual ? " (จองทั้งโต๊ะเท่านั้น)" : ""}`}
                     >
                       {seat.seatNumber}
                     </button>

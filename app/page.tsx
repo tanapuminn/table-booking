@@ -60,7 +60,7 @@ export default function HomePage() {
   }
 
   const navigateToDashboard = () => {
-    router.push("/dashboard")
+    router.push("/psmnlp-dashboard")
   }
 
   return (
@@ -135,9 +135,6 @@ export default function HomePage() {
                 rows={3}
               />
             </div>
-
-            {/* แทนที่ส่วนแสดงราคาเดิมด้วย PriceSummary */}
-            <PriceSummary selectedSeats={selectedSeats} />
 
             <Button onClick={handleBooking} className="w-full" size="lg">
               ดำเนินการจอง

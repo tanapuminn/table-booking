@@ -8,9 +8,14 @@ import { Toaster } from "@/components/ui/toaster"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "ระบบจองโต๊ะจีน",
+  title: "Prasanmit Chinese Restaurant Booking System",
   description: "ระบบจองโต๊ะและที่นั่งสำหรับร้านอาหารจีน",
-    generator: 'v0.dev'
+  generator: 'v0.dev',
+  icons: {
+    icon: "/images/psm.png",      // favicon (default)
+    apple: "/images/psm.png",     // สำหรับ Apple device
+    shortcut: "/images/psm.png",  // shortcut icon
+  },
 }
 
 export default function RootLayout({
