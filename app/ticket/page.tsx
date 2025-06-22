@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +28,17 @@ type Booking = {
   paymentProof?: string;
 };
 
-export default function TicketPage() {
+// Loading component for Suspense fallback
+function TicketLoading() {
+  return (
+    <div className="max-w-2xl mx-auto text-center py-8">
+      <p>กำลังโหลดข้อมูล...</p>
+    </div>
+  );
+}
+
+// Main ticket component that uses useSearchParams
+function TicketContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -200,5 +210,14 @@ export default function TicketPage() {
         </Button>
       </div>
     </div>
+  );
+}
+
+// Main export component wrapped with Suspense
+export default function TicketPage() {
+  return (
+    <Suspense fallback={<TicketLoading />}>
+      <TicketContent />
+    </Suspense>
   );
 }
