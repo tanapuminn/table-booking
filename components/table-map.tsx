@@ -44,7 +44,7 @@ interface BookingRecord {
   paymentProof?: string | null
 }
 
-export function TableMap() {
+export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => void }) {
   const { selectedSeats, setSelectedSeats, zoneConfigs, tablePositions } = useBooking()
   const [selectedTable, setSelectedTable] = useState<Table | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -70,6 +70,11 @@ export function TableMap() {
 
     fetchBookings()
   }, [])
+
+  const handleConfirmSelection = () => {
+    setIsDialogOpen(false)
+    onConfirmSelection?.()  // เรียก scroll หลังปิด dialog
+  }
 
   // สร้าง tables ด้วย useMemo
   const tables = useMemo(() => {
@@ -263,7 +268,7 @@ export function TableMap() {
         )}
 
         {/* เพิ่ม grid layout เพื่อให้โต๊ะวางตามตำแหน่งที่กำหนดใน table-layout-editor */}
-        <div className={cn("relative rounded-lg p-4 min-h-[600px] overflow-auto", getZoneColor(zone))}>
+        <div className={cn("relative rounded-lg p-4 min-h-[900px] overflow-auto", getZoneColor(zone))}>
           {/* สร้าง grid เพื่อแสดงตำแหน่งโต๊ะ */}
           <div className="grid grid-cols-10 gap-4 opacity-10 pointer-events-none absolute inset-0 p-4">
             {Array.from({ length: 100 }, (_, i) => (
@@ -503,7 +508,7 @@ export function TableMap() {
               ปิด
             </Button>
             <Button
-              onClick={() => setIsDialogOpen(false)}
+              onClick={handleConfirmSelection}
               disabled={
                 !selectedTable || !selectedTable.seats.some((seat) => selectedSeats.some((s) => s.id === seat.id))
               }

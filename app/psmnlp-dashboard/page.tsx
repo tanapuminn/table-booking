@@ -304,6 +304,7 @@ export default function DashboardPage() {
         {/* จัดการการจอง */}
         <TabsContent value="bookings" className="space-y-6">
           <div className="flex flex-col md:flex-row md:items-center md:space-x-4 space-y-2 md:space-y-0">
+
             <div className="flex items-center space-x-2">
               <Search className="h-4 w-4 text-muted-foreground" />
               <Input
@@ -326,7 +327,18 @@ export default function DashboardPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            <Button
+              variant="secondary"
+              onClick={() => {
+                window.open(`${baseURL}/api/bookings/export/xlsx`, "_blank");
+              }}
+            >
+              📄 ส่งออกรายงาน Excel
+            </Button>
+            
           </div>
+
 
           {/* ประวัติการจอง */}
           <div className="grid gap-4">
@@ -357,9 +369,9 @@ export default function DashboardPage() {
                             </DialogHeader>
                             <div className="mt-4">
                               <img
-                                src={`${baseURL}/${booking.paymentProof}` || "/placeholder.svg"}
+                                src={`${booking.paymentProof}`}
                                 alt="Payment proof"
-                                className="w-full rounded-lg"
+                                className="w-full object-cover rounded-lg"
                               />
                             </div>
                           </DialogContent>

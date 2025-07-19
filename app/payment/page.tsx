@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, CreditCard, QrCode, FileText } from "lucide-react";
+import { Upload, CreditCard, QrCode, FileText, Loader2  } from "lucide-react";
 import { useBooking } from "@/components/booking-provider";
 import { useToast } from "@/hooks/use-toast";
 import { PriceSummary } from "@/components/price-summary";
@@ -27,6 +27,7 @@ export default function PaymentPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [totalPrice, setTotalPrice] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<"qrcode" | "upload">("qrcode");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // คำนวณราคารวมเมื่อ component โหลด
   useEffect(() => {
@@ -97,6 +98,8 @@ export default function PaymentPage() {
       return;
     }
 
+    setIsSubmitting(true);  
+
     try {
       const formData = new FormData();
       formData.append("customerName", bookingInfo.name);
@@ -158,6 +161,12 @@ export default function PaymentPage() {
           router.push(`/`);
           window.location.reload();
         }, 1500);
+      } else if (error.response.status === 400) {
+        toast({
+          title: "ข้อผิดพลาด",
+          description: error.response.data.message || "ข้อมูลไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่",
+          variant: "destructive",
+        });
       } else {
         toast({
           title: "ข้อผิดพลาด",
@@ -165,6 +174,8 @@ export default function PaymentPage() {
           variant: "destructive",
         });
       }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -189,6 +200,18 @@ export default function PaymentPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+
+      {/* Loading Overlay */}
+      {isSubmitting && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg p-6 flex flex-col items-center space-y-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-lg font-medium">กำลังประมวลผล...</p>
+            <p className="text-sm text-muted-foreground">กรุณารอสักครู่</p>
+          </div>
+        </div>
+      )}
+      
       <div className="text-center">
         <h2 className="text-3xl font-bold mb-2">ชำระเงิน</h2>
         <p className="text-muted-foreground">ตรวจสอบข้อมูลการจองและทำการชำระเงิน</p>
@@ -295,7 +318,7 @@ export default function PaymentPage() {
                     <img
                       src={imagePreview || "/placeholder.svg"}
                       alt="Payment proof"
-                      className="w-full h-48 object-cover"
+                      className="w-full h-full object-cover"
                     />
                   </div>
                 </div>
@@ -305,8 +328,15 @@ export default function PaymentPage() {
         </TabsContent>
       </Tabs>
 
-      <Button onClick={handleConfirmPayment} className="w-full" size="lg" disabled={isLoading}>
-        ยืนยันการชำระเงิน
+      <Button onClick={handleConfirmPayment} className="w-full" size="lg" disabled={isLoading || isSubmitting}>
+        {isSubmitting ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            กำลังประมวลผล...
+          </>
+        ) : (
+          "ยืนยันการชำระเงิน"
+        )}
       </Button>
     </div>
   );

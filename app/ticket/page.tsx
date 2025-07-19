@@ -184,9 +184,9 @@ function TicketContent() {
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-2">หลักฐานการชำระเงิน</p>
               <img
-                src={`${baseURL}/${booking.paymentProof}`}
+                src={`${booking.paymentProof}`}
                 alt="Payment proof"
-                className="w-full h-48 object-cover rounded-lg"
+                className="w-full h-full object-cover rounded-lg"
               />
             </div>
           )}

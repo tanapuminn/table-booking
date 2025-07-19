@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,6 +24,15 @@ export default function HomePage() {
     phone: "",
     notes: "",
   })
+
+  const formRef = useRef<HTMLDivElement | null>(null)
+
+  const scrollToForm = () => {
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth" })
+    }, 100)  // หน่วงนิดหน่อยเพื่อให้ state อัปเดตทัน
+  }
+
 
   const handleBooking = () => {
     if (selectedSeats.length === 0) {
@@ -82,10 +91,10 @@ export default function HomePage() {
         </Button>
       </div>
 
-      <TableMap />
+      <TableMap onConfirmSelection={scrollToForm} />
 
       {selectedSeats.length > 0 && (
-        <Card>
+        <Card ref={formRef}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <User className="h-5 w-5" />
