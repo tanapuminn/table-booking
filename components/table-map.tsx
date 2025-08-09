@@ -39,7 +39,7 @@ interface BookingRecord {
   seats: Array<{ tableId: number; seatNumber: number; zone: string }>
   notes?: string
   totalPrice: number
-  status: "confirmed" | "cancelled"
+  status: "pending" | "confirmed" | "cancelled"
   bookingDate: string
   paymentProof?: string | null
 }

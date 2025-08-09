@@ -16,7 +16,7 @@ import { PriceSummary } from "@/components/price-summary"
 
 export default function HomePage() {
   const router = useRouter()
-  const { selectedSeats, setBookingInfo, calculateTotalPrice } = useBooking()
+  const { selectedSeats, setBookingInfo, calculateTotalPrice, tablePositions } = useBooking()
   const { toast } = useToast()
 
   const [customerInfo, setCustomerInfo] = useState({
@@ -34,7 +34,7 @@ export default function HomePage() {
   }
 
 
-  const handleBooking = () => {
+  const handleBooking = async () => {
     if (selectedSeats.length === 0) {
       toast({
         title: "กรุณาเลือกที่นั่ง",
@@ -53,19 +53,81 @@ export default function HomePage() {
       return
     }
 
-    // บันทึกข้อมูลการจองก่อน
-    setBookingInfo(customerInfo)
+    try {
+      // บันทึกข้อมูลการจองก่อน
+      setBookingInfo(customerInfo)
 
-    // แสดงข้อความยืนยันการจอง
-    toast({
-      title: "ดำเนินการจองสำเร็จ",
-      description: "กำลังนำท่านไปยังหน้าชำระเงิน",
-    })
+      // แสดงข้อความกำลังดำเนินการ
+      toast({
+        title: "กำลังดำเนินการจอง...",
+        description: "โปรดรอสักครู่",
+      })
 
-    // ใช้ setTimeout เพื่อให้แน่ใจว่า state ถูกอัพเดตและ toast แสดงก่อนที่จะ redirect
-    setTimeout(() => {
-      router.push("/payment")
-    }, 500)
+      // สร้างการจองผ่าน API
+      const bookingData = {
+        customerName: customerInfo.name,
+        phone: customerInfo.phone,
+        seats: JSON.stringify(selectedSeats.map(seat => ({
+          tableId: seat.tableId,
+          seatNumber: seat.seatNumber,
+          zone: tablePositions.find((t) => t.id === seat.tableId)?.zone || "",
+        }))),
+        notes: customerInfo.notes || "",
+        bookingDate: new Date().toISOString(),
+      };
+
+      const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
+      const response = await fetch(`${baseURL}/api/bookings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bookingData),
+      });
+
+      const bookingResponse = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 409) {
+          toast({
+            title: "ข้อผิดพลาด",
+            description: `ที่นั่งที่เลือกมีการจองแล้ว กรุณาเลือกที่นั่งอื่น`,
+            variant: "destructive",
+          });
+        } else {
+          throw new Error(bookingResponse.message || 'เกิดข้อผิดพลาดในการสร้างการจอง');
+        }
+      } else {
+        // บันทึก booking ID เพื่อใช้ในหน้า payment
+        sessionStorage.setItem('pendingBookingId', bookingResponse.id);
+
+        // แสดงข้อความสำเร็จ
+        toast({
+          title: "สร้างการจองสำเร็จ",
+          description: "กำลังนำท่านไปยังหน้าชำระเงิน",
+        })
+
+        // ไปที่หน้าชำระเงิน
+        setTimeout(() => {
+          router.push("/payment")
+        }, 500)
+      }
+    } catch (error: any) {
+      console.error('Booking error:', error);
+      if (error.statusCode === 409) {
+        toast({
+          title: "ข้อผิดพลาด",
+          description: `ที่นั่งที่เลือกมีการจองแล้ว กรุณาเลือกที่นั่งอื่น`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "เกิดข้อผิดพลาด",
+          description: error instanceof Error ? error.message : "ไม่สามารถสร้างการจองได้ กรุณาลองใหม่อีกครั้ง",
+          variant: "destructive",
+        })
+      }
+    }
   }
 
   const navigateToDashboard = () => {

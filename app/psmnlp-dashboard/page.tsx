@@ -77,7 +77,7 @@ export default function DashboardPage() {
 
 
 
-  const handleChangeStatus = async (bookingId: string, newStatus: "confirmed" | "cancelled") => {
+  const handleChangeStatus = async (bookingId: string, newStatus: "pending" | "confirmed" | "cancelled") => {
     try {
       const confirmDelete = window.confirm("คุณแน่ใจหรือไม่ว่าต้องการยกเลิกการจองนี้?");
       if (!confirmDelete) return;
@@ -220,6 +220,12 @@ export default function DashboardPage() {
         return "bg-green-100 text-green-800";
       case "cancelled":
         return "bg-red-100 text-red-800";
+      case "pending_payment":
+        return "bg-yellow-100 text-yellow-800";
+      case "payment_timeout":
+        return "bg-orange-100 text-orange-800";
+      case "pending":
+        return "bg-blue-100 text-blue-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -231,6 +237,12 @@ export default function DashboardPage() {
         return "ยืนยันแล้ว";
       case "cancelled":
         return "ยกเลิกแล้ว";
+      case "pending_payment":
+        return "รอชำระเงิน";
+      case "payment_timeout":
+        return "หมดเวลาชำระ";
+      case "pending":
+        return "รอดำเนินการ";
       default:
         return status;
     }
@@ -323,7 +335,10 @@ export default function DashboardPage() {
                 <SelectContent>
                   <SelectItem value="all">สถานะทั้งหมด</SelectItem>
                   <SelectItem value="confirmed">ยืนยันแล้ว</SelectItem>
+                  <SelectItem value="pending_payment">รอชำระเงิน</SelectItem>
+                  <SelectItem value="payment_timeout">หมดเวลาชำระ</SelectItem>
                   <SelectItem value="cancelled">ยกเลิกแล้ว</SelectItem>
+                  <SelectItem value="pending">รอดำเนินการ</SelectItem>
                 </SelectContent>
               </Select>
             </div>

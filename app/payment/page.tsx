@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, CreditCard, QrCode, FileText, Loader2  } from "lucide-react";
+import { Upload, CreditCard, QrCode, FileText, Loader2, Clock, X } from "lucide-react";
 import { useBooking } from "@/components/booking-provider";
 import { useToast } from "@/hooks/use-toast";
 import { PriceSummary } from "@/components/price-summary";
@@ -28,28 +28,103 @@ export default function PaymentPage() {
   const [totalPrice, setTotalPrice] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<"qrcode" | "upload">("qrcode");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(15 * 60); // 15 minutes in seconds
+  const [isTimerActive, setIsTimerActive] = useState(true);
+  const [pendingBookingId, setPendingBookingId] = useState<string | null>(null);
+  const [bookingData, setBookingData] = useState<any>(null);
 
-  // คำนวณราคารวมเมื่อ component โหลด
+  // โหลดข้อมูลการจองที่รอชำระเงิน
   useEffect(() => {
-    if (selectedSeats.length === 0 || !bookingInfo) {
-      router.push("/");
-      return;
-    }
+    const loadPendingBooking = async () => {
+      const bookingId = sessionStorage.getItem('pendingBookingId');
+      
+      if (!bookingId) {
+        // ถ้าไม่มี pending booking ID แต่มี selected seats ให้ใช้วิธีเดิม
+        if (selectedSeats.length === 0 || !bookingInfo) {
+          router.push("/");
+          return;
+        }
+        
+        try {
+          const price = calculateTotalPrice(selectedSeats);
+          setTotalPrice(price);
+        } catch (error) {
+          console.error("Error calculating price:", error);
+          toast({
+            title: "เกิดข้อผิดพลาด",
+            description: "ไม่สามารถคำนวณราคาได้ กรุณาลองใหม่อีกครั้ง",
+            variant: "destructive",
+          });
+        } finally {
+          setIsLoading(false);
+        }
+        return;
+      }
 
-    try {
-      const price = calculateTotalPrice(selectedSeats);
-      setTotalPrice(price);
-    } catch (error) {
-      console.error("Error calculating price:", error);
-      toast({
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถคำนวณราคาได้ กรุณาลองใหม่อีกครั้ง",
-        variant: "destructive",
+      try {
+        // ดึงข้อมูลการจองจาก API
+        const response = await fetch(`${baseURL}/api/bookings/${bookingId}`);
+        if (!response.ok) {
+          throw new Error('ไม่พบข้อมูลการจอง');
+        }
+        
+        const booking = await response.json();
+        setPendingBookingId(bookingId);
+        setBookingData(booking);
+        setTotalPrice(booking.totalPrice);
+        
+        // คำนวณเวลาที่เหลือจาก paymentDeadline
+        if (booking.paymentDeadline) {
+          const deadline = new Date(booking.paymentDeadline);
+          const now = new Date();
+          const remainingTime = Math.max(0, Math.floor((deadline.getTime() - now.getTime()) / 1000));
+          setTimeLeft(remainingTime);
+          
+          if (remainingTime <= 0) {
+            handleCancelPayment();
+            return;
+          }
+        }
+        
+      } catch (error) {
+        console.error("Error loading booking:", error);
+        toast({
+          title: "เกิดข้อผิดพลาด",
+          description: "ไม่สามารถโหลดข้อมูลการจองได้ กรุณาลองใหม่อีกครั้ง",
+          variant: "destructive",
+        });
+        router.push("/");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadPendingBooking();
+  }, []);
+
+  // Timer countdown effect
+  useEffect(() => {
+    if (!isTimerActive) return;
+
+    const timer = setInterval(() => {
+      setTimeLeft((prevTime) => {
+        if (prevTime <= 1) {
+          setIsTimerActive(false);
+          handleCancelPayment();
+          return 0;
+        }
+        return prevTime - 1;
       });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedSeats, bookingInfo, calculateTotalPrice, router, toast]);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isTimerActive]);
+
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -79,17 +154,56 @@ export default function PaymentPage() {
     }
   };
 
+const handleCancelPayment = async () => {
+    setIsTimerActive(false);
+    
+    // ตรวจสอบว่ามี pending booking ID หรือไม่
+    const currentBookingId = pendingBookingId || sessionStorage.getItem('pendingBookingId');
+    
+    if (currentBookingId) {
+      try {
+        // ส่งคำขอไปยัง API เพื่อเปลี่ยนสถานะเป็น cancelled
+        await axios.put(`${baseURL}/api/bookings/${currentBookingId}`, {
+          status: "cancelled"
+        }, {
+          headers: { "Content-Type": "application/json" },
+        });
+        
+        toast({
+          title: "ยกเลิกการชำระเงิน",
+          description: "การจองของคุณถูกยกเลิกแล้ว",
+          variant: "destructive",
+        });
+      } catch (error: any) {
+        console.error("Error cancelling booking:", error);
+        toast({
+          title: "ข้อผิดพลาด",
+          description: "ไม่สามารถยกเลิกการจองได้ กรุณาลองใหม่",
+          variant: "destructive",
+        });
+      }
+    }
+
+    // ล้างข้อมูลการจอง
+    clearBooking();
+    sessionStorage.removeItem('pendingBookingId');
+    router.push("/");
+  };
+
   const handleConfirmPayment = async () => {
-    if (!bookingInfo) {
+    // ตรวจสอบว่ามี pending booking หรือไม่
+    const currentBookingId = pendingBookingId || sessionStorage.getItem('pendingBookingId');
+    
+    if (!currentBookingId) {
       toast({
         title: "ข้อผิดพลาด",
-        description: "ไม่พบข้อมูลผู้จอง",
+        description: "ไม่พบข้อมูลการจอง",
         variant: "destructive",
       });
       return;
     }
 
-    if (!paymentImage) {
+    if (paymentMethod === "upload" && !paymentImage) {
       toast({
         title: "กรุณาอัปโหลดหลักฐานการชำระเงิน",
         description: "โปรดอัปโหลดรูปภาพหลักฐานการชำระเงิน",
@@ -98,60 +212,78 @@ export default function PaymentPage() {
       return;
     }
 
-    setIsSubmitting(true);  
+    setIsSubmitting(true);
+    setIsTimerActive(false);
 
     try {
-      const formData = new FormData();
-      formData.append("customerName", bookingInfo.name);
-      formData.append("phone", bookingInfo.phone);
-      formData.append("seats", JSON.stringify(selectedSeats.map(seat => ({
-        tableId: seat.tableId,
-        seatNumber: seat.seatNumber,
-        zone: tablePositions.find(t => t.id === seat.tableId)?.zone || "",
-      }))));
-      formData.append("notes", bookingInfo.notes || "");
-      formData.append("totalPrice", totalPrice.toString());
-      formData.append("bookingDate", new Date().toISOString());
-      formData.append("status", "confirmed");
       if (paymentMethod === "upload" && paymentImage) {
+        // ใช้ confirm payment API สำหรับ upload
+        const formData = new FormData();
         formData.append("paymentProof", paymentImage);
+
+        const response = await axios.post(`${baseURL}/api/bookings/${currentBookingId}/confirm-payment`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+
+        // อัปเดต state ด้วยข้อมูลการจอง
+        addBookingRecord({
+          id: response.data.id,
+          customerName: response.data.customerName,
+          phone: response.data.phone,
+          seats: response.data.seats,
+          notes: response.data.notes,
+          totalPrice: response.data.totalPrice,
+          status: "confirmed",
+          bookingDate: response.data.bookingDate,
+          paymentProof: response.data.paymentProof,
+        });
+
+        toast({
+          title: "ยืนยันการชำระเงินสำเร็จ",
+          description: "กำลังสร้างตั๋วของคุณ...",
+        });
+
+        setTimeout(() => {
+          router.push(`/ticket?bookingId=${response.data.id}`);
+        }, 1500);
+      } else {
+        // สำหรับ QR Code payment - อัปเดตสถานะเป็น confirmed โดยตรง
+        const response = await axios.put(`${baseURL}/api/bookings/${currentBookingId}`, {
+          status: "confirmed"
+        }, {
+          headers: { "Content-Type": "application/json" },
+        });
+
+        // อัปเดต state ด้วยข้อมูลการจอง
+        addBookingRecord({
+          id: response.data.id,
+          customerName: response.data.customerName,
+          phone: response.data.phone,
+          seats: response.data.seats,
+          notes: response.data.notes,
+          totalPrice: response.data.totalPrice,
+          status: "confirmed",
+          bookingDate: response.data.bookingDate,
+          paymentProof: null,
+        });
+
+        toast({
+          title: "ยืนยันการชำระเงินสำเร็จ",
+          description: "กำลังสร้างตั๋วของคุณ...",
+        });
+
+        setTimeout(() => {
+          router.push(`/ticket?bookingId=${response.data.id}`);
+        }, 1500);
       }
-
-      const response = await axios.post(`${baseURL}/api/bookings`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      // อัปเดต state ด้วยข้อมูลการจอง
-      addBookingRecord({
-        id: response.data.id,
-        customerName: bookingInfo.name,
-        phone: bookingInfo.phone,
-        seats: selectedSeats.map(seat => ({
-          tableId: seat.tableId,
-          seatNumber: seat.seatNumber,
-          zone: tablePositions.find(t => t.id === seat.tableId)?.zone || "",
-        })),
-        notes: bookingInfo.notes,
-        totalPrice,
-        status: "confirmed",
-        bookingDate: new Date().toISOString(),
-        paymentProof: paymentMethod === "upload" && paymentImage ? URL.createObjectURL(paymentImage) : null,
-      });
 
       // ล้างข้อมูลการจอง
       clearBooking();
+      sessionStorage.removeItem('pendingBookingId');
 
-      toast({
-        title: "ยืนยันการชำระเงินสำเร็จ",
-        description: "กำลังสร้างตั๋วของคุณ...",
-      });
-
-      setTimeout(() => {
-        router.push(`/ticket?bookingId=${response.data.id}`);
-      }, 1500);
     } catch (error: any) {
       console.log("Error confirming payment:", error);
-      if (error.response.status === 409) {
+      if (error.response?.status === 409) {
         toast({
           title: "ข้อผิดพลาด",
           description: `ที่นั่งที่เลือกมีการจองแล้ว กรุณาเลือกที่นั่งอื่น`,
@@ -161,7 +293,7 @@ export default function PaymentPage() {
           router.push(`/`);
           window.location.reload();
         }, 1500);
-      } else if (error.response.status === 400) {
+      } else if (error.response?.status === 400) {
         toast({
           title: "ข้อผิดพลาด",
           description: error.response.data.message || "ข้อมูลไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่",
@@ -170,7 +302,7 @@ export default function PaymentPage() {
       } else {
         toast({
           title: "ข้อผิดพลาด",
-          description: `ไม่สามารถสร้างการจองได้: ${error instanceof Error ? error.message : "เกิดข้อผิดพลาดไม่ทราบสาเหตุ"}`,
+          description: `ไม่สามารถยืนยันการชำระเงินได้: ${error instanceof Error ? error.message : "เกิดข้อผิดพลาดไม่ทราบสาเหตุ"}`,
           variant: "destructive",
         });
       }
@@ -187,7 +319,10 @@ export default function PaymentPage() {
     );
   }
 
-  if (selectedSeats.length === 0 || !bookingInfo) {
+  // ตรวจสอบว่ามีข้อมูลการจองหรือไม่ (ทั้งแบบเก่าและใหม่)
+  const hasBookingData = bookingData || (selectedSeats.length > 0 && bookingInfo);
+  
+  if (!hasBookingData) {
     return (
       <div className="max-w-2xl mx-auto text-center py-8">
         <p>ไม่พบข้อมูลการจอง กรุณาเลือกที่นั่งก่อน</p>
@@ -197,6 +332,15 @@ export default function PaymentPage() {
       </div>
     );
   }
+
+  // กำหนดข้อมูลที่จะแสดง (จาก API หรือจาก state)
+  const displayBookingInfo = bookingData ? {
+    name: bookingData.customerName,
+    phone: bookingData.phone,
+    notes: bookingData.notes
+  } : bookingInfo;
+  
+  const displaySeats = bookingData ? bookingData.seats : selectedSeats;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -217,6 +361,8 @@ export default function PaymentPage() {
         <p className="text-muted-foreground">ตรวจสอบข้อมูลการจองและทำการชำระเงิน</p>
       </div>
 
+      
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -228,18 +374,18 @@ export default function PaymentPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="text-sm font-medium">ชื่อผู้จอง</Label>
-              <p className="text-lg">{bookingInfo.name}</p>
+              <p className="text-lg">{displayBookingInfo?.name}</p>
             </div>
             <div>
               <Label className="text-sm font-medium">เบอร์โทรศัพท์</Label>
-              <p className="text-lg">{bookingInfo.phone}</p>
+              <p className="text-lg">{displayBookingInfo?.phone}</p>
             </div>
           </div>
 
-          {bookingInfo.notes && (
+          {displayBookingInfo?.notes && (
             <div>
               <Label className="text-sm font-medium">หมายเหตุ</Label>
-              <p className="text-lg">{bookingInfo.notes}</p>
+              <p className="text-lg">{displayBookingInfo.notes}</p>
             </div>
           )}
 
@@ -248,10 +394,11 @@ export default function PaymentPage() {
           <div>
             <Label className="text-sm font-medium">ที่นั่งที่จอง</Label>
             <div className="mt-2 space-y-2">
-              {selectedSeats.map((seat) => {
+              {displaySeats.map((seat: any, index: number) => {
                 const tablePosition = tablePositions.find((t) => t.id === seat.tableId);
+                const seatKey = seat.id || `${seat.tableId}-${seat.seatNumber}-${index}`;
                 return (
-                  <div key={seat.id} className="flex justify-between items-center p-2 bg-muted rounded">
+                  <div key={seatKey} className="flex justify-between items-center p-2 bg-muted rounded">
                     <span>
                       {tablePosition?.name || `โต๊ะ ${seat.tableId}`} ที่นั่ง {seat.seatNumber}
                     </span>
@@ -263,7 +410,22 @@ export default function PaymentPage() {
 
           <Separator />
 
-          <PriceSummary selectedSeats={selectedSeats} />
+          <PriceSummary selectedSeats={displaySeats} />
+        </CardContent>
+      </Card>
+
+      {/* Timer Card */}
+      <Card className="border-orange-200 bg-orange-50">
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-center space-x-2">
+            <Clock className="h-5 w-5 text-orange-600" />
+            <span className="text-lg font-semibold text-orange-800">
+              เวลาที่เหลือ: {formatTime(timeLeft)}
+            </span>
+          </div>
+          <p className="text-center text-sm text-orange-600 mt-2">
+            กรุณาทำการชำระเงินภายในเวลาที่กำหนด
+          </p>
         </CardContent>
       </Card>
 
@@ -328,16 +490,34 @@ export default function PaymentPage() {
         </TabsContent>
       </Tabs>
 
-      <Button onClick={handleConfirmPayment} className="w-full" size="lg" disabled={isLoading || isSubmitting}>
-        {isSubmitting ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            กำลังประมวลผล...
-          </>
-        ) : (
-          "ยืนยันการชำระเงิน"
-        )}
-      </Button>
+      {/* Action Buttons */}
+      <div className="grid grid-cols-2 gap-4">
+        <Button 
+          variant="outline" 
+          onClick={handleCancelPayment} 
+          className="w-full" 
+          size="lg"
+          disabled={isSubmitting}
+        >
+          <X className="mr-2 h-4 w-4" />
+          ยกเลิกการจอง
+        </Button>
+        <Button 
+          onClick={handleConfirmPayment} 
+          className="w-full" 
+          size="lg" 
+          disabled={isLoading || isSubmitting || (paymentMethod === "upload" && !paymentImage)}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              กำลังประมวลผล...
+            </>
+          ) : (
+            "ยืนยันการชำระเงิน"
+          )}
+        </Button>
+      </div>
     </div>
   );
 }

@@ -5,6 +5,19 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 
 const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
 
+// เพิ่ม axios interceptor เพื่อจัดการ errors
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error('API Error:', error);
+    // ถ้าเป็น network error หรือ chunk loading error
+    if (error.code === 'NETWORK_ERROR' || error.message?.includes('ChunkLoadError')) {
+      console.error('Network or chunk loading error detected');
+    }
+    return Promise.reject(error);
+  }
+);
+
 interface Seat {
   id: string
   tableId: number
@@ -25,7 +38,7 @@ export interface BookingRecord {
   seats: Array<{ tableId: number; seatNumber: number; zone: string }>
   notes?: string
   totalPrice: number
-  status: "confirmed" | "cancelled"
+  status: "pending" | "pending_payment" | "confirmed" | "cancelled" | "payment_timeout"
   bookingDate: string
   paymentProof?: string | null
 }
@@ -89,6 +102,9 @@ interface BookingContextType {
     totalFinalPrice: number
     totalDiscount: number
   }
+  isLoading: boolean
+  error: string | null
+  retryFetchData: () => void
 }
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined)
@@ -101,27 +117,69 @@ export function BookingProvider({ children }: { children: ReactNode }) {
   const [bookingHistory, setBookingHistory] = useState<BookingRecord[]>([]);
   const [zoneConfigs, setZoneConfigs] = useState<ZoneConfig[]>([]);
   const [tablePositions, setTablePositions] = useState<TablePosition[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryTrigger, setRetryTrigger] = useState(0);
+
+  // ฟังก์ชันสำหรับ retry API calls
+  const retryApiCall = async (apiCall: () => Promise<any>, maxRetries = 3) => {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        return await apiCall();
+      } catch (error) {
+        console.error(`API call failed (attempt ${i + 1}/${maxRetries}):`, error);
+        if (i === maxRetries - 1) {
+          throw error;
+        }
+        // รอสักครู่ก่อนลองใหม่
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+      }
+    }
+  };
+
+  // ฟังก์ชันสำหรับ retry fetch data
+  const retryFetchData = useCallback(() => {
+    setRetryTrigger(prev => prev + 1);
+  }, []);
 
   // ดึงข้อมูลจาก API เมื่อ component mount
   useEffect(() => {
     const fetchData = async () => {
+      setIsLoading(true);
+      setError(null);
+      
       try {
-        const [bookingsRes, zonesRes, tablesRes] = await Promise.all([
-          axios.get(`${baseURL}/api/bookings`),
-          axios.get(`${baseURL}/api/zones`),
-          axios.get(`${baseURL}/api/tables`),
-        ]);
+        const fetchWithRetry = async () => {
+          const [bookingsRes, zonesRes, tablesRes] = await Promise.all([
+            retryApiCall(() => axios.get(`${baseURL}/api/bookings`)),
+            retryApiCall(() => axios.get(`${baseURL}/api/zones`)),
+            retryApiCall(() => axios.get(`${baseURL}/api/tables`)),
+          ]);
 
-        setBookingHistory(bookingsRes.data);
-        setZoneConfigs(zonesRes.data);
-        setTablePositions(tablesRes.data);
+          setBookingHistory(bookingsRes.data);
+          setZoneConfigs(zonesRes.data);
+          setTablePositions(tablesRes.data);
+        };
+
+        await fetchWithRetry();
       } catch (error) {
         console.error("Error fetching initial data:", error);
+        setError(error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
+        
+        // ถ้าเป็น chunk loading error ให้ reload หน้า
+        if (error instanceof Error && 
+            (error.message.includes('ChunkLoadError') || 
+             error.message.includes('Loading chunk'))) {
+          console.log('Detected chunk loading error, reloading page...');
+          window.location.reload();
+        }
+      } finally {
+        setIsLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+  }, [retryTrigger]);
 
   const addBookingRecord = useCallback((record: BookingRecord) => {
     setBookingHistory((prev) => {
@@ -436,6 +494,9 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         toggleTableActive,
         calculateTotalPrice,
         calculateDetailedPrice,
+        isLoading,
+        error,
+        retryFetchData,
       }}
     >
       {children}
