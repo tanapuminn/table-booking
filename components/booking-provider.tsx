@@ -35,7 +35,7 @@ export interface BookingRecord {
   id: string
   customerName: string
   phone: string
-  seats: Array<{ tableId: number; seatNumber: number; zone: string }>
+  seats: Array<{ tableId: number; seatNumber: number; zone: string; tableName?: string }>
   notes?: string
   totalPrice: number
   status: "pending" | "pending_payment" | "confirmed" | "cancelled" | "payment_timeout"

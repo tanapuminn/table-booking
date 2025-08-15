@@ -136,11 +136,11 @@ export default function HomePage() {
 
   return (
     <div className="space-y-8">
-      {/* Header with navigation */}
+      {/* Header section */}
       <div className="flex justify-between items-center">
         <div className="text-center flex-1">
-          <h2 className="text-3xl font-bold mb-2">เลือกโต๊ะและที่นั่ง</h2>
-          <p className="text-muted-foreground">คลิกเพื่อเลือกโต๊ะหรือที่นั่งที่ต้องการจอง</p>
+          <h2 className="text-3xl font-bold mb-2">แผนผังการจอง</h2>
+          <p className="text-muted-foreground">เลือกโต๊ะหรือที่นั่งที่ต้องการจอง</p>
         </div>
         <Button
           variant="outline"
@@ -153,8 +153,15 @@ export default function HomePage() {
         </Button>
       </div>
 
+      {/* Stage section */}
+      <div className="bg-yellow-200 text-yellow-900 px-12 py-3 rounded-lg font-bold text-xl shadow text-center">
+        เวที
+      </div>
+
+      {/* Unified table map */}
       <TableMap onConfirmSelection={scrollToForm} />
 
+      {/* Booking form */}
       {selectedSeats.length > 0 && (
         <Card ref={formRef}>
           <CardHeader>
@@ -164,14 +171,23 @@ export default function HomePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Selected seats */}
             <div>
               <p className="font-medium mb-2">ที่นั่งที่เลือก:</p>
               <div className="flex flex-wrap gap-2">
-                {selectedSeats.map((seat) => (
-                  <span key={seat.id} className="bg-primary text-primary-foreground px-2 py-1 rounded text-sm">
-                    โต๊ะ {seat.tableId} ที่นั่ง {seat.seatNumber}
-                  </span>
-                ))}
+                {selectedSeats.map((seat) => {
+                  const table = tablePositions.find(t => t.id === seat.tableId);
+                  const isVip = table?.zone === "VIP";
+                  return (
+                    <span
+                      key={seat.id}
+                      className={`${isVip ? 'bg-purple-600' : 'bg-blue-600'} text-white px-2 py-1 rounded text-sm`}
+                    >
+                      โต๊ะ {table?.name} ที่นั่ง {seat.seatNumber}
+                      {isVip && ' (VIP)'}
+                    </span>
+                  );
+                })}
               </div>
             </div>
 

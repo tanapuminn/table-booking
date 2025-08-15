@@ -4,13 +4,15 @@ import { useState, useMemo, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useBooking } from "./booking-provider"
 import { cn } from "@/lib/utils"
 import { Info, InfoIcon as InfoCircle, Lock } from "lucide-react"
-// เพิ่ม import PriceSummary
+// ลบ import Tabs, TabsContent, TabsList, TabsTrigger ออก
+// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+// import { Alert, AlertDescription } from "@/components/ui/alert"
+// import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { PriceSummary } from "./price-summary"
 import axios from "axios"
 
@@ -39,7 +41,7 @@ interface BookingRecord {
   seats: Array<{ tableId: number; seatNumber: number; zone: string }>
   notes?: string
   totalPrice: number
-  status: "pending" | "confirmed" | "cancelled"
+  status: "pending" | "pending_payment" | "confirmed" | "cancelled" | "payment_timeout"
   bookingDate: string
   paymentProof?: string | null
 }
@@ -58,7 +60,7 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
       try {
         setIsLoading(true)
         const response = await axios.get(`${baseURL}/api/bookings`)
-        setBookings(response.data.filter((booking: BookingRecord) => booking.status === "confirmed"))
+        setBookings(response.data.filter((booking: BookingRecord) => booking.status === "confirmed" || booking.status === "pending_payment"))
         setError(null)
       } catch (err) {
         console.error("Error fetching bookings:", err)
@@ -216,11 +218,11 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
       return "bg-amber-200 border-amber-400 text-amber-800"
     } else {
       switch (table.zone) {
-        case "A":
+        case "VIP":
           return "bg-blue-100 border-blue-300 text-blue-800 hover:bg-blue-200"
-        case "B":
+        case "A":
           return "bg-green-100 border-green-300 text-green-800 hover:bg-green-200"
-        case "C":
+        case "B":
           return "bg-purple-100 border-purple-300 text-purple-800 hover:bg-purple-200"
         default:
           return "bg-amber-100 border-amber-300 text-amber-800 hover:bg-amber-200"
@@ -249,34 +251,48 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
     return { x, y }
   }
 
-  const renderZoneMap = (zone: string) => {
-    const zoneTables = activeTables.filter((table) => table.zone === zone)
-    const zoneConfig = zoneConfigs.find((z) => z.id === zone)
-
-    if (zoneTables.length === 0) {
-      return <div className="text-center py-8 text-muted-foreground">โซนนี้ปิดให้บริการในขณะนี้</div>
-    }
-
+  // แทนที่ renderZoneMap ด้วยฟังก์ชันใหม่ที่แสดงทุกโต๊ะ
+  const renderAllTables = () => {
     return (
       <div className="space-y-4">
-        {/* แสดงข้อมูลการจองของโซน */}
-        {zoneConfig && !zoneConfig.allowIndividualSeatBooking && (
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertDescription>โซนนี้จองได้เฉพาะทั้งโต๊ะเท่านั้น ไม่สามารถเลือกที่นั่งแยกได้</AlertDescription>
-          </Alert>
-        )}
+        {/* แสดงคำอธิบายสำหรับทุกโซน */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          {zoneConfigs.map((zone) => (
+            <div key={zone.id} className="p-4 rounded-lg border bg-card">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                {zone.name}
+                {!zone.isActive && (
+                  <Badge variant="secondary" className="text-xs">
+                    ปิด
+                  </Badge>
+                )}
+              </h3>
+              <p className="text-sm text-muted-foreground">{zone.description}</p>
+              <div className="mt-2 space-y-1">
+                <div className="flex items-center gap-1">
+                  <InfoCircle className="h-3 w-3 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">
+                    {zone.allowIndividualSeatBooking
+                      ? `ราคา: ${zone.seatPrice} บาท/ที่นั่ง หรือ ${zone.tablePrice} บาท/โต๊ะ`
+                      : `ราคา: ${zone.tablePrice} บาท/โต๊ะ`}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
 
-        {/* เพิ่ม grid layout เพื่อให้โต๊ะวางตามตำแหน่งที่กำหนดใน table-layout-editor */}
-        <div className={cn("relative rounded-lg p-4 min-h-[900px] overflow-auto", getZoneColor(zone))}>
-          {/* สร้าง grid เพื่อแสดงตำแหน่งโต๊ะ */}
-          <div className="grid grid-cols-10 gap-4 opacity-10 pointer-events-none absolute inset-0 p-4">
+        {/* แสดงแผนผังรวม */}
+        <div className="relative rounded-lg p-4 min-h-[900px] overflow-auto border bg-gray-50 w-[60%] mx-auto">
+          {/* Grid guides */}
+          {/* <div className="grid grid-cols-1 gap-4 opacity-10 pointer-events-none absolute inset-0 p-4">
             {Array.from({ length: 100 }, (_, i) => (
-              <div key={i} className="w-full h-16 border border-dashed border-gray-300 rounded"></div>
+              <div key={i} className="w-full h-16 border border-dashed border-gray-300 rounded">111</div>
             ))}
-          </div>
+          </div> */}
 
-          {zoneTables.map((table) => {
+          {/* แสดงโต๊ะทุกโซน */}
+          {activeTables.map((table) => {
             const isFull = isTableFull(table)
 
             return (
@@ -289,7 +305,6 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
                   transition: "all 0.3s ease",
                 }}
               >
-                {/* โต๊ะวงกลม */}
                 <button
                   className={cn(
                     "w-20 h-20 rounded-full flex flex-col items-center justify-center shadow-lg border-4 transition-all relative",
@@ -302,8 +317,6 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
                 >
                   <span className="font-bold">{table.name}</span>
                   <span className="text-xs">{getTableStatus(table)}</span>
-
-                  {/* แสดงไอคอนล็อคสำหรับโต๊ะที่เต็ม */}
                   {isFull && (
                     <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-1">
                       <Lock className="h-3 w-3 text-white" />
@@ -360,50 +373,7 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
           </p>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="A" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              {zoneConfigs.map((zone) => (
-                <TabsTrigger key={zone.id} value={zone.id} disabled={!zone.isActive} className="relative">
-                  {zone.name}
-                  {!zone.isActive && (
-                    <Badge variant="secondary" className="ml-2 text-xs">
-                      ปิด
-                    </Badge>
-                  )}
-                  {zone.isActive && !zone.allowIndividualSeatBooking && (
-                    <Badge variant="outline" className="ml-2 text-xs">
-                      ทั้งโต๊ะ
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-
-            {zoneConfigs.map((zone) => (
-              <TabsContent key={zone.id} value={zone.id} className="mt-4">
-                <div className="mb-4">
-                  <h3 className="text-lg font-semibold">{zone.name}</h3>
-                  <p className="text-sm text-muted-foreground">{zone.description}</p>
-                  <div className="flex flex-wrap items-center gap-4 mt-2">
-                    <p className="text-xs text-muted-foreground">โซนนี้มี 20 โต๊ะ (180 ที่นั่ง) - แต่ละโต๊ะมี 9 ที่นั่ง</p>
-                    <Badge variant={zone.allowIndividualSeatBooking ? "default" : "secondary"} className="text-xs">
-                      {zone.allowIndividualSeatBooking ? "จองรายที่นั่งได้" : "จองทั้งโต๊ะเท่านั้น"}
-                    </Badge>
-
-                    <div className="flex items-center gap-1">
-                      <InfoCircle className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">
-                        {zone.allowIndividualSeatBooking
-                          ? `ราคา: ${zone.seatPrice} บาท/ที่นั่ง หรือ ${zone.tablePrice} บาท/โต๊ะ`
-                          : `ราคา: ${zone.tablePrice} บาท/โต๊ะ`}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                {renderZoneMap(zone.id)}
-              </TabsContent>
-            ))}
-          </Tabs>
+          {renderAllTables()}
         </CardContent>
       </Card>
 

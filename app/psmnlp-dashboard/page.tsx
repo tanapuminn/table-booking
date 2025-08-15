@@ -351,7 +351,7 @@ export default function DashboardPage() {
             >
               📄 ส่งออกรายงาน Excel
             </Button>
-            
+
           </div>
 
 
@@ -470,12 +470,14 @@ export default function DashboardPage() {
                     <div>
                       <Label className="text-sm font-medium">ที่นั่งที่จอง</Label>
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {booking.seats.map((seat, index) => (
-                          <Badge key={index} variant="secondary">
-                            {seat.zone ? `${seat.zone}${seat.tableId % 20 || 20}` : `โต๊ะ ${seat.tableId}`} ที่{" "}
-                            {seat.seatNumber}
-                          </Badge>
-                        ))}
+                        {booking.seats.map((seat, index) => {
+                          return (
+                            <Badge key={index} variant="secondary">
+                              { `โต๊ะ ${seat.tableName}`} ที่{" "}
+                              {seat.seatNumber}
+                            </Badge>
+                          )
+                        })}
                       </div>
                     </div>
                     <div>
