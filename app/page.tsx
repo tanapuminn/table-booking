@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { TableMap } from "@/components/table-map"
 import { useBooking } from "@/components/booking-provider"
 import { useToast } from "@/hooks/use-toast"
-import { Settings, User } from "lucide-react"
+import { Settings, User, Copyright } from "lucide-react"
 // เพิ่ม import PriceSummary
 import { PriceSummary } from "@/components/price-summary"
 
@@ -142,7 +142,7 @@ export default function HomePage() {
           <h2 className="text-3xl font-bold mb-2">แผนผังการจอง</h2>
           <p className="text-muted-foreground">เลือกโต๊ะหรือที่นั่งที่ต้องการจอง</p>
         </div>
-        <Button
+        {/* <Button
           variant="outline"
           onClick={navigateToDashboard}
           className="flex items-center gap-2"
@@ -150,7 +150,7 @@ export default function HomePage() {
         >
           <Settings className="h-4 w-4" />
           จัดการระบบ
-        </Button>
+        </Button> */}
       </div>
 
       {/* Stage section */}
@@ -193,7 +193,7 @@ export default function HomePage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="name">ชื่อ-นามสกุล *</Label>
+                <Label htmlFor="name">ชื่อผู้จอง *</Label>
                 <Input
                   id="name"
                   value={customerInfo.name}
@@ -213,7 +213,7 @@ export default function HomePage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="notes">หมายเหตุ</Label>
+              <Label htmlFor="notes">หมายเหตุ: ระบุชื่อนักเรียนพร้อมระบุจำนวนที่นั่งที่ทำการจอง (กรณีรวมโต๊ะกับท่านอื่น)</Label>
               <Textarea
                 id="notes"
                 value={customerInfo.notes}
@@ -229,6 +229,13 @@ export default function HomePage() {
           </CardContent>
         </Card>
       )}
+
+      {/* New Footer */}
+      <footer className="py-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-1">
+        <span>Copyright 2025</span>
+        <Copyright className="h-4 w-4" onClick={navigateToDashboard} />
+        <span>Tanapumin</span>
+      </footer>
     </div>
   )
 }

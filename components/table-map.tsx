@@ -97,16 +97,17 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
         }
       })
 
-      const cellSize = 60
-      const padding = 20
+      const cellSize = window.innerWidth <= 768 ? 40 : 60; // ปรับขนาด cell ตามหน้าจอ
+      const padding = window.innerWidth <= 768 ? 10 : 20; // ปรับ padding ตามหน้าจอ
+      const circleSize = window.innerWidth <= 768 ? 20 : 50;
 
       return {
         id: tablePos.id,
         name: tablePos.name,
         zone: tablePos.zone,
         seats,
-        x: tablePos.x * (cellSize + padding) + 50,
-        y: tablePos.y * (cellSize + padding) + 50,
+        x: tablePos.x * (cellSize + padding) + circleSize,
+        y: tablePos.y * (cellSize + padding) + circleSize,
       }
     })
   }, [tablePositions, bookings])
@@ -283,13 +284,7 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
         </div>
 
         {/* แสดงแผนผังรวม */}
-        <div className="relative rounded-lg p-4 min-h-[900px] overflow-auto border bg-gray-50 w-[60%] mx-auto">
-          {/* Grid guides */}
-          {/* <div className="grid grid-cols-1 gap-4 opacity-10 pointer-events-none absolute inset-0 p-4">
-            {Array.from({ length: 100 }, (_, i) => (
-              <div key={i} className="w-full h-16 border border-dashed border-gray-300 rounded">111</div>
-            ))}
-          </div> */}
+        <div className="relative rounded-lg p-4 min-h-[600px] md:min-h-[600px] lg:min-h-[900px] overflow-auto border bg-gray-50 max-w-[360px] md:max-w-[720px] lg:max-w-[1080px] mx-auto">
 
           {/* แสดงโต๊ะทุกโซน */}
           {activeTables.map((table) => {
@@ -307,7 +302,7 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
               >
                 <button
                   className={cn(
-                    "w-20 h-20 rounded-full flex flex-col items-center justify-center shadow-lg border-4 transition-all relative",
+                    "w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 rounded-full flex flex-col items-center justify-center shadow-lg border-4 transition-all relative",
                     getTableColor(table),
                     isFull ? "cursor-not-allowed" : "hover:scale-105",
                   )}
@@ -315,11 +310,11 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
                   disabled={isFull}
                   title={isFull ? "โต๊ะเต็มแล้ว" : `คลิกเพื่อเลือกที่นั่ง - ${getTableStatus(table)}`}
                 >
-                  <span className="font-bold">{table.name}</span>
-                  <span className="text-xs">{getTableStatus(table)}</span>
+                  <span className="font-bold text-xs md:text-sm lg:text-base">{table.name}</span>
+                  <span className="text-[10px] md:text-xs">{getTableStatus(table)}</span>
                   {isFull && (
-                    <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-1">
-                      <Lock className="h-3 w-3 text-white" />
+                    <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 md:p-1">
+                      <Lock className="h-2 w-2 md:h-3 md:w-3 text-white" />
                     </div>
                   )}
                 </button>
