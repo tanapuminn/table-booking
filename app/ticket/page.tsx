@@ -193,7 +193,7 @@ function TicketContent() {
 
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <p className="text-sm text-yellow-800">
-              <strong>หมายเหตุ:</strong> กรุณาบันทึกภาพตั๋วนี้ไว้เป็นหลักฐานการจอง
+              <strong>หมายเหตุ:</strong> กรุณาบันทึกภาพ(Capture)ตั๋วนี้ไว้เป็นหลักฐานการจอง
             </p>
           </div>
         </CardContent>
