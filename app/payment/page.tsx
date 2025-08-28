@@ -246,36 +246,37 @@ const handleCancelPayment = async () => {
         setTimeout(() => {
           router.push(`/ticket?bookingId=${response.data.id}`);
         }, 1500);
-      } else {
-        // สำหรับ QR Code payment - อัปเดตสถานะเป็น confirmed โดยตรง
-        const response = await axios.put(`${baseURL}/api/bookings/${currentBookingId}`, {
-          status: "confirmed"
-        }, {
-          headers: { "Content-Type": "application/json" },
-        });
+      } 
+      // else {
+      //   // สำหรับ QR Code payment - อัปเดตสถานะเป็น confirmed โดยตรง
+      //   const response = await axios.put(`${baseURL}/api/bookings/${currentBookingId}`, {
+      //     status: "confirmed"
+      //   }, {
+      //     headers: { "Content-Type": "application/json" },
+      //   });
 
-        // อัปเดต state ด้วยข้อมูลการจอง
-        addBookingRecord({
-          id: response.data.id,
-          customerName: response.data.customerName,
-          phone: response.data.phone,
-          seats: response.data.seats,
-          notes: response.data.notes,
-          totalPrice: response.data.totalPrice,
-          status: "confirmed",
-          bookingDate: response.data.bookingDate,
-          paymentProof: null,
-        });
+      //   // อัปเดต state ด้วยข้อมูลการจอง
+      //   addBookingRecord({
+      //     id: response.data.id,
+      //     customerName: response.data.customerName,
+      //     phone: response.data.phone,
+      //     seats: response.data.seats,
+      //     notes: response.data.notes,
+      //     totalPrice: response.data.totalPrice,
+      //     status: "confirmed",
+      //     bookingDate: response.data.bookingDate,
+      //     paymentProof: null,
+      //   });
 
-        toast({
-          title: "ยืนยันการชำระเงินสำเร็จ",
-          description: "กำลังสร้างตั๋วของคุณ...",
-        });
+      //   toast({
+      //     title: "ยืนยันการชำระเงินสำเร็จ",
+      //     description: "กำลังสร้างตั๋วของคุณ...",
+      //   });
 
-        setTimeout(() => {
-          router.push(`/ticket?bookingId=${response.data.id}`);
-        }, 1500);
-      }
+      //   setTimeout(() => {
+      //     router.push(`/ticket?bookingId=${response.data.id}`);
+      //   }, 1500);
+      // }
 
       // ล้างข้อมูลการจอง
       clearBooking();
@@ -506,7 +507,7 @@ const handleCancelPayment = async () => {
           onClick={handleConfirmPayment} 
           className="w-full" 
           size="lg" 
-          disabled={isLoading || isSubmitting || (paymentMethod === "upload" && !paymentImage)}
+          disabled={isLoading || isSubmitting || !paymentImage}
         >
           {isSubmitting ? (
             <>
