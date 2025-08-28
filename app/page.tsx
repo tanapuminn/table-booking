@@ -93,7 +93,12 @@ export default function HomePage() {
             title: "ข้อผิดพลาด",
             description: `ที่นั่งที่เลือกมีการจองแล้ว กรุณาเลือกที่นั่งอื่น`,
             variant: "destructive",
+            duration: 1500,
           });
+
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000)
         } else {
           throw new Error(bookingResponse.message || 'เกิดข้อผิดพลาดในการสร้างการจอง');
         }
@@ -120,6 +125,10 @@ export default function HomePage() {
           description: `ที่นั่งที่เลือกมีการจองแล้ว กรุณาเลือกที่นั่งอื่น`,
           variant: "destructive",
         });
+
+        setTimeout(() => {
+          router.push("/")
+        }, 1000)
       } else {
         toast({
           title: "เกิดข้อผิดพลาด",
@@ -206,8 +215,13 @@ export default function HomePage() {
                 <Input
                   id="phone"
                   value={customerInfo.phone}
-                  onChange={(e) => setCustomerInfo((prev) => ({ ...prev, phone: e.target.value }))}
+                  maxLength={10}
+                  onChange={(e) => {
+                    const numericValue = e.target.value.replace(/\D/g, '');
+                    setCustomerInfo((prev) => ({ ...prev, phone: numericValue }));
+                  }}
                   placeholder="กรอกเบอร์โทรศัพท์"
+                  pattern="[0-9]*"
                 />
               </div>
             </div>
