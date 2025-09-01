@@ -28,7 +28,7 @@ export default function PaymentPage() {
   const [totalPrice, setTotalPrice] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<"qrcode" | "upload">("qrcode");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(15 * 60); // 15 minutes in seconds
+  const [timeLeft, setTimeLeft] = useState(20 * 60); // 20 minutes = 1200 seconds
   const [isTimerActive, setIsTimerActive] = useState(true);
   const [pendingBookingId, setPendingBookingId] = useState<string | null>(null);
   const [bookingData, setBookingData] = useState<any>(null);
@@ -37,14 +37,14 @@ export default function PaymentPage() {
   useEffect(() => {
     const loadPendingBooking = async () => {
       const bookingId = sessionStorage.getItem('pendingBookingId');
-      
+
       if (!bookingId) {
         // ถ้าไม่มี pending booking ID แต่มี selected seats ให้ใช้วิธีเดิม
         if (selectedSeats.length === 0 || !bookingInfo) {
           router.push("/");
           return;
         }
-        
+
         try {
           const price = calculateTotalPrice(selectedSeats);
           setTotalPrice(price);
@@ -67,25 +67,23 @@ export default function PaymentPage() {
         if (!response.ok) {
           throw new Error('ไม่พบข้อมูลการจอง');
         }
-        
+
         const booking = await response.json();
         setPendingBookingId(bookingId);
         setBookingData(booking);
         setTotalPrice(booking.totalPrice);
-        
+
         // คำนวณเวลาที่เหลือจาก paymentDeadline
         if (booking.paymentDeadline) {
           const deadline = new Date(booking.paymentDeadline);
           const now = new Date();
           const remainingTime = Math.max(0, Math.floor((deadline.getTime() - now.getTime()) / 1000));
-          setTimeLeft(remainingTime);
-          
-          if (remainingTime <= 0) {
-            handleCancelPayment();
-            return;
-          }
+          console.log("Remaining time (seconds):", remainingTime);
+          setTimeLeft(remainingTime || 20 * 60); // ถ้า remainingTime เป็น 0 ให้ใช้ 20 นาที
+        } else {
+          setTimeLeft(20 * 60); // ถ้าไม่มี deadline ให้ใช้ 20 นาที
         }
-        
+
       } catch (error) {
         console.error("Error loading booking:", error);
         toast({
@@ -108,9 +106,9 @@ export default function PaymentPage() {
 
     const timer = setInterval(() => {
       setTimeLeft((prevTime) => {
-        if (prevTime <= 1) {
+        if (prevTime <= 0) {
           setIsTimerActive(false);
-          handleCancelPayment();
+          handlePaymentTimeout();
           return 0;
         }
         return prevTime - 1;
@@ -154,12 +152,12 @@ export default function PaymentPage() {
     }
   };
 
-const handleCancelPayment = async () => {
+  const handleCancelPayment = async () => {
     setIsTimerActive(false);
-    
+
     // ตรวจสอบว่ามี pending booking ID หรือไม่
     const currentBookingId = pendingBookingId || sessionStorage.getItem('pendingBookingId');
-    
+
     if (currentBookingId) {
       try {
         // ส่งคำขอไปยัง API เพื่อเปลี่ยนสถานะเป็น cancelled
@@ -190,10 +188,56 @@ const handleCancelPayment = async () => {
     router.push("/");
   };
 
+  const handlePaymentTimeout = async () => {
+    setIsTimerActive(false);
+
+    const currentBookingId = pendingBookingId || sessionStorage.getItem('pendingBookingId');
+    if (!currentBookingId) return;
+
+    // Function to check expired status
+    const checkExpiredStatus = async (): Promise<boolean> => {
+      try {
+        const res = await axios.post(`${baseURL}/api/bookings/check-expired`, 
+          { headers: { "Content-Type": "application/json" } }
+        );
+        return res.status === 200;
+      } catch (error) {
+        console.error("Error checking expired status:", error);
+        return false;
+      }
+    };
+
+    // Keep checking until we get a success response
+    const retryInterval = setInterval(async () => {
+      const isExpired = await checkExpiredStatus();
+      
+      if (isExpired) {
+        clearInterval(retryInterval);
+        
+        toast({
+          title: "หมดเวลาชำระเงิน",
+          description: "การจองของคุณถูกยกเลิกแล้ว",
+          variant: "destructive",
+        });
+        
+        // Clear booking data and redirect
+        clearBooking();
+        sessionStorage.removeItem('pendingBookingId');
+        router.push("/");
+      }
+    }, 5000); // Check every 5 seconds
+
+    // Clear interval after 2 minutes to prevent infinite checking
+    setTimeout(() => {
+      clearInterval(retryInterval);
+      console.log("Stopped checking expired status after timeout");
+    }, 2 * 60 * 1000);
+  };
+
   const handleConfirmPayment = async () => {
     // ตรวจสอบว่ามี pending booking หรือไม่
     const currentBookingId = pendingBookingId || sessionStorage.getItem('pendingBookingId');
-    
+
     if (!currentBookingId) {
       toast({
         title: "ข้อผิดพลาด",
@@ -246,7 +290,7 @@ const handleCancelPayment = async () => {
         setTimeout(() => {
           router.push(`/ticket?bookingId=${response.data.id}`);
         }, 1500);
-      } 
+      }
       // else {
       //   // สำหรับ QR Code payment - อัปเดตสถานะเป็น confirmed โดยตรง
       //   const response = await axios.put(`${baseURL}/api/bookings/${currentBookingId}`, {
@@ -322,7 +366,7 @@ const handleCancelPayment = async () => {
 
   // ตรวจสอบว่ามีข้อมูลการจองหรือไม่ (ทั้งแบบเก่าและใหม่)
   const hasBookingData = bookingData || (selectedSeats.length > 0 && bookingInfo);
-  
+
   if (!hasBookingData) {
     return (
       <div className="max-w-2xl mx-auto text-center py-8">
@@ -340,7 +384,7 @@ const handleCancelPayment = async () => {
     phone: bookingData.phone,
     notes: bookingData.notes
   } : bookingInfo;
-  
+
   const displaySeats = bookingData ? bookingData.seats : selectedSeats;
 
   return (
@@ -356,13 +400,13 @@ const handleCancelPayment = async () => {
           </div>
         </div>
       )}
-      
+
       <div className="text-center">
         <h2 className="text-3xl font-bold mb-2">ชำระเงิน</h2>
         <p className="text-muted-foreground">ตรวจสอบข้อมูลการจองและทำการชำระเงิน</p>
       </div>
 
-      
+
 
       <Card>
         <CardHeader>
@@ -493,20 +537,20 @@ const handleCancelPayment = async () => {
 
       {/* Action Buttons */}
       <div className="grid grid-cols-2 gap-4">
-        <Button 
-          variant="outline" 
-          onClick={handleCancelPayment} 
-          className="w-full" 
+        <Button
+          variant="outline"
+          onClick={handleCancelPayment}
+          className="w-full"
           size="lg"
           disabled={isSubmitting}
         >
           <X className="mr-2 h-4 w-4" />
           ยกเลิกการจอง
         </Button>
-        <Button 
-          onClick={handleConfirmPayment} 
-          className="w-full" 
-          size="lg" 
+        <Button
+          onClick={handleConfirmPayment}
+          className="w-full"
+          size="lg"
           disabled={isLoading || isSubmitting || !paymentImage}
         >
           {isSubmitting ? (

@@ -393,13 +393,15 @@ export default function DashboardPage() {
                         </Dialog>
                       )}
 
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm" onClick={() => handleOpenTicket(booking.id)}>
-                            <Ticket className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                      </Dialog>
+                      {booking.status === "confirmed" && (
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm" onClick={() => handleOpenTicket(booking.id)}>
+                              <Ticket className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                        </Dialog>
+                      )}
 
                       <Dialog>
                         <DialogTrigger asChild>
@@ -447,7 +449,7 @@ export default function DashboardPage() {
                               //   ยืนยันการจอง
                               // </AlertDialogAction>
                             )}
-                            {booking.status !== "cancelled" && (
+                            {(booking.status !== "cancelled" && booking.status !== "payment_timeout") && (
                               <AlertDialogAction
                                 onClick={() => handleCancelBooking(booking.id)}
                                 className="text-white bg-red-600 hover:bg-red-400"
@@ -473,7 +475,7 @@ export default function DashboardPage() {
                         {booking.seats.map((seat, index) => {
                           return (
                             <Badge key={index} variant="secondary">
-                              { `โต๊ะ ${seat.tableName}`} ที่{" "}
+                              {`โต๊ะ ${seat.tableName}`} ที่{" "}
                               {seat.seatNumber}
                             </Badge>
                           )

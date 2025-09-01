@@ -119,6 +119,11 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
     return activeZones.includes(table.zone) && tablePos?.isActive
   })
 
+  useEffect(() => {
+    console.log("Active Zones:", activeZones)
+    console.log("Zones length:", activeZones.length)
+  })
+
   // ฟังก์ชันตรวจสอบว่าโต๊ะเต็มหรือไม่
   const isTableFull = (table: Table) => {
     return table.seats.every((seat) => seat.isBooked)
@@ -192,19 +197,6 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
     }
   }
 
-  const getZoneColor = (zone: string) => {
-    switch (zone) {
-      case "A":
-        return "border-blue-200 bg-blue-50"
-      case "B":
-        return "border-green-200 bg-green-50"
-      case "C":
-        return "border-purple-200 bg-purple-50"
-      default:
-        return "border-gray-200 bg-gray-50"
-    }
-  }
-
   const getTableColor = (table: Table) => {
     const hasSelectedSeats = table.seats.some((seat) => selectedSeats.some((s) => s.id === seat.id))
     const hasBookedSeats = table.seats.some((seat) => seat.isBooked)
@@ -214,16 +206,18 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
     if (hasSelectedSeats) {
       return "bg-primary border-primary-600 text-primary-foreground"
     } else if (allSeatsBooked) {
-      return "bg-red-200 border-red-400 text-red-800 cursor-not-allowed opacity-60"
+      return "bg-red-400 border-red-400 text-red-800 cursor-not-allowed opacity-90"
     } else if (hasBookedSeats) {
       return "bg-amber-200 border-amber-400 text-amber-800"
     } else {
       switch (table.zone) {
         case "VIP":
-          return "bg-blue-100 border-blue-300 text-blue-800 hover:bg-blue-200"
+          return "bg-pink-100 border-pink-300 text-pink-800 hover:bg-pink-200"
         case "A":
-          return "bg-green-100 border-green-300 text-green-800 hover:bg-green-200"
+          return "bg-blue-100 border-blue-300 text-blue-800 hover:bg-blue-200"
         case "B":
+          return "bg-green-100 border-green-300 text-green-800 hover:bg-green-200"
+        case "C":
           return "bg-purple-100 border-purple-300 text-purple-800 hover:bg-purple-200"
         default:
           return "bg-amber-100 border-amber-300 text-amber-800 hover:bg-amber-200"
@@ -283,45 +277,56 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
           ))}
         </div>
 
+        {/* No Active Zone */}
+        {activeZones.length === 0 && (
+          <Alert variant="destructive" className="mt-4">
+            <Info className="h-4 w-4" />
+            <AlertDescription>ระบบยังไม่เปิดใช้งานในขณะนี้ กรุณาติดต่อผู้ดูแลระบบ</AlertDescription>
+          </Alert>
+        )}
+
         {/* แสดงแผนผังรวม */}
-        <div className="relative rounded-lg p-4 min-h-[600px] md:min-h-[600px] lg:min-h-[900px] overflow-auto border bg-gray-50 max-w-[360px] md:max-w-[720px] lg:max-w-[1080px] mx-auto">
+        {activeZones.length > 0 &&
+          <div className="relative rounded-lg p-4 min-h-[600px] md:min-h-[600px] lg:min-h-[900px] overflow-auto border bg-gray-50 max-w-[360px] md:max-w-[720px] lg:max-w-[1080px] mx-auto">
 
-          {/* แสดงโต๊ะทุกโซน */}
-          {activeTables.map((table) => {
-            const isFull = isTableFull(table)
+            {/* แสดงโต๊ะทุกโซน */}
+            {activeTables.map((table) => {
+              const isFull = isTableFull(table)
 
-            return (
-              <div
-                key={table.id}
-                className="absolute"
-                style={{
-                  left: table.x,
-                  top: table.y,
-                  transition: "all 0.3s ease",
-                }}
-              >
-                <button
-                  className={cn(
-                    "w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 rounded-full flex flex-col items-center justify-center shadow-lg border-4 transition-all relative",
-                    getTableColor(table),
-                    isFull ? "cursor-not-allowed" : "hover:scale-105",
-                  )}
-                  onClick={() => handleTableClick(table)}
-                  disabled={isFull}
-                  title={isFull ? "โต๊ะเต็มแล้ว" : `คลิกเพื่อเลือกที่นั่ง - ${getTableStatus(table)}`}
+              return (
+                <div
+                  key={table.id}
+                  className="absolute"
+                  style={{
+                    left: table.x,
+                    top: table.y,
+                    transition: "all 0.3s ease",
+                  }}
                 >
-                  <span className="font-bold text-xs md:text-sm lg:text-base">{table.name}</span>
-                  <span className="text-[10px] md:text-xs">{getTableStatus(table)}</span>
-                  {isFull && (
-                    <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 md:p-1">
-                      <Lock className="h-2 w-2 md:h-3 md:w-3 text-white" />
-                    </div>
-                  )}
-                </button>
-              </div>
-            )
-          })}
-        </div>
+                  <button
+                    className={cn(
+                      "w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 rounded-full flex flex-col items-center justify-center shadow-lg border-4 transition-all relative",
+                      getTableColor(table),
+                      isFull ? "cursor-not-allowed" : "hover:scale-105",
+                    )}
+                    onClick={() => handleTableClick(table)}
+                    disabled={isFull}
+                    title={isFull ? "โต๊ะเต็มแล้ว" : `คลิกเพื่อเลือกที่นั่ง - ${getTableStatus(table)}`}
+                  >
+                    <span className="font-bold text-xs md:text-sm lg:text-base">{table.name}</span>
+                    <span className="text-[10px] md:text-xs">{getTableStatus(table)}</span>
+                    {isFull && (
+                      <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 md:p-1">
+                        <Lock className="h-2 w-2 md:h-3 md:w-3 text-white" />
+                      </div>
+                    )}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        }
+
       </div>
     )
   }

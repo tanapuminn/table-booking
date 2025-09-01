@@ -151,15 +151,6 @@ export default function HomePage() {
           <h2 className="text-3xl font-bold mb-2">แผนผังการจอง</h2>
           <p className="text-muted-foreground">เลือกโต๊ะหรือที่นั่งที่ต้องการจอง</p>
         </div>
-        {/* <Button
-          variant="outline"
-          onClick={navigateToDashboard}
-          className="flex items-center gap-2"
-          title="เข้าสู่ระบบจัดการ"
-        >
-          <Settings className="h-4 w-4" />
-          จัดการระบบ
-        </Button> */}
       </div>
 
       {/* Stage section */}
@@ -202,16 +193,21 @@ export default function HomePage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="name">ชื่อผู้จอง *</Label>
+                <Label htmlFor="name">ชื่อผู้จอง
+                  <span className="text-red-500"> * </span>
+                </Label>
                 <Input
                   id="name"
                   value={customerInfo.name}
                   onChange={(e) => setCustomerInfo((prev) => ({ ...prev, name: e.target.value }))}
                   placeholder="กรอกชื่อ-นามสกุล"
+                  required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="phone">เบอร์โทรศัพท์ *</Label>
+                <Label htmlFor="phone">เบอร์โทรศัพท์ 
+                  <span className="text-red-500"> * </span>
+                </Label>
                 <Input
                   id="phone"
                   value={customerInfo.phone}
@@ -222,12 +218,13 @@ export default function HomePage() {
                   }}
                   placeholder="กรอกเบอร์โทรศัพท์"
                   pattern="[0-9]*"
+                  required
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="notes">หมายเหตุ: ระบุชื่อนักเรียนพร้อมระบุจำนวนที่นั่งที่ทำการจอง (กรณีรวมโต๊ะกับท่านอื่น)</Label>
+              <Label htmlFor="notes">หมายเหตุ: ระบุชื่อนักเรียนพร้อมระบุจำนวนที่นั่งที่ทำการจอง (กรณีรวมโต๊ะกับท่านอื่น) เพื่อนำไปออกตั๋วเข้างาน</Label>
               <Textarea
                 id="notes"
                 value={customerInfo.notes}
