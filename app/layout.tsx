@@ -33,6 +33,7 @@ export default function RootLayout({
               <header className="border-b">
                 <div className="container mx-auto px-4 py-4">
                   <h1 className="text-2xl font-bold text-center">ระบบจองโต๊ะจีน</h1>
+                  <h1 className="text-2xl font-bold text-center">งานร้อยดวงใจ สายใยประสานมิตร ครั้งที่ 21</h1>
                 </div>
               </header>
               <main className="container mx-auto px-4 py-8">{children}</main>
