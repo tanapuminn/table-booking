@@ -147,8 +147,11 @@ export function BookingProvider({ children }: { children: ReactNode }) {
     const fetchData = async () => {
       setIsLoading(true);
       setError(null);
-      
+
       try {
+
+        const response = await retryApiCall(() => axios.get(`${baseURL}/api/health-check`));
+
         const fetchWithRetry = async () => {
           const [bookingsRes, zonesRes, tablesRes] = await Promise.all([
             retryApiCall(() => axios.get(`${baseURL}/api/bookings`)),
@@ -161,15 +164,17 @@ export function BookingProvider({ children }: { children: ReactNode }) {
           setTablePositions(tablesRes.data);
         };
 
-        await fetchWithRetry();
+        if (response.data.status === 'healthy') {
+          await fetchWithRetry();
+        }
       } catch (error) {
         console.error("Error fetching initial data:", error);
         setError(error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการโหลดข้อมูล');
-        
+
         // ถ้าเป็น chunk loading error ให้ reload หน้า
-        if (error instanceof Error && 
-            (error.message.includes('ChunkLoadError') || 
-             error.message.includes('Loading chunk'))) {
+        if (error instanceof Error &&
+          (error.message.includes('ChunkLoadError') ||
+            error.message.includes('Loading chunk'))) {
           console.log('Detected chunk loading error, reloading page...');
           window.location.reload();
         }
