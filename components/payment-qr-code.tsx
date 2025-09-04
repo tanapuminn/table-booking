@@ -14,13 +14,13 @@ interface PaymentQRCodeProps {
   bankName?: string
 }
 
-export function PaymentQRCode({ amount, recipientName = "PRASANMIT", bankName = "ธนาคารไทยพาณิชย์" }: PaymentQRCodeProps) {
+export function PaymentQRCode({ amount, recipientName = "พัชรี เวชยันต์วิวัฒน์", bankName = "ธนาคารไทยพาณิชย์" }: PaymentQRCodeProps) {
   const { toast } = useToast()
   const [copied, setCopied] = useState(false)
   const [qrSize, setQrSize] = useState(220)
   const [qrCode, setQrCode] = useState("");
   let promptpay = '0805912700';
-  let bankAccountNumber = '080-5-91270-0';
+  let bankAccountNumber = '404-487734-0';
 
   // ปรับขนาด QR Code ตามขนาดหน้าจอ
   useEffect(() => {
@@ -64,7 +64,7 @@ export function PaymentQRCode({ amount, recipientName = "PRASANMIT", bankName = 
       <CardHeader className="bg-primary/5">
         <CardTitle className="flex items-center gap-2">
           <QrCode className="h-5 w-5" />
-          สแกนเพื่อชำระเงิน
+          ช่องทางชำระเงิน
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col items-center pt-6 space-y-4">
