@@ -1,4 +1,5 @@
 "use client"
+import React from "react"
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -10,8 +11,6 @@ import { TableMap } from "@/components/table-map"
 import { useBooking } from "@/components/booking-provider"
 import { useToast } from "@/hooks/use-toast"
 import { Settings, User, Copyright, Loader2 } from "lucide-react"
-// เพิ่ม import PriceSummary
-import { PriceSummary } from "@/components/price-summary"
 
 
 export default function HomePage() {
@@ -145,7 +144,7 @@ export default function HomePage() {
     const navigateToDashboard = () => {
         router.push("/psmnlp-dashboard")
     }
-    
+
     return (
         <div className="space-y-8">
             {/* Header section */}
@@ -157,9 +156,9 @@ export default function HomePage() {
             </div>
 
             {/* Stage section */}
-            <div className="bg-yellow-200 text-yellow-900 px-12 py-3 rounded-lg font-bold text-xl shadow text-center">
+            {/* <div className="bg-red-400 text-white px-12 py-6 rounded-lg font-bold text-2xl shadow text-center">
                 เวที
-            </div>
+            </div> */}
 
             {/* Unified table map */}
             <TableMap onConfirmSelection={scrollToForm} />
@@ -258,7 +257,9 @@ export default function HomePage() {
             {/* New Footer */}
             <footer className="py-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-1">
                 <span>Copyright 2025</span>
-                <Copyright className="h-4 w-4" onClick={navigateToDashboard} />
+                <Copyright className="h-4 w-4"
+                    // onClick={navigateToDashboard}
+                />
                 <span>Tanapumin</span>
             </footer>
         </div>

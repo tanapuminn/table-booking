@@ -15,6 +15,7 @@ import { Info, InfoIcon as InfoCircle, Lock } from "lucide-react"
 // import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { PriceSummary } from "./price-summary"
 import axios from "axios"
+import Loading from "@/src/components/Loading"
 
 const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
 
@@ -53,6 +54,7 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
   const [bookings, setBookings] = useState<BookingRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [allZonesInactive, setAllZonesInactive] = useState(false) // true = ไม่มีโซนที่ active
 
   // ดึงข้อมูลการจองจาก API
   useEffect(() => {
@@ -77,6 +79,35 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
     setIsDialogOpen(false)
     onConfirmSelection?.()  // เรียก scroll หลังปิด dialog
   }
+
+  const activeZones = zoneConfigs.filter((zone) => zone.isActive).map((zone) => zone.id)
+
+  // ย้ายการคำนวณ allZonesInactive ไปไว้ใน useEffect
+  // const isAllInactive = zoneConfigs.every((zone) => !zone.isActive);
+  // useEffect(() => {
+  //   if (!isAllInactive) {
+  //     setAllZonesInactive(true); // ไม่มีโซนที่ active
+  //   }
+
+  //   console.log("Zones length:", activeZones.length);
+  //   console.log('isAllInactive:', isAllInactive);
+  //   console.log('All zones inactive state:', allZonesInactive);
+  // }, [allZonesInactive, isAllInactive]);
+
+  useEffect(() => {
+    if (zoneConfigs.length === 0) {
+      setAllZonesInactive(false); // ค่าเริ่มต้นเมื่อไม่มีข้อมูล
+      return;
+    }
+    
+    const isAllInactive = zoneConfigs.every((zone) => !zone.isActive);
+    setAllZonesInactive(isAllInactive); // อัปเดต state ตามผลลัพธ์
+
+    console.log("Zones length:", zoneConfigs.length);
+    console.log("Zone config:", zoneConfigs);
+    console.log('isAllInactive:', isAllInactive);
+    console.log('All zones inactive state:', allZonesInactive);
+  }, [zoneConfigs]); // ใช้ zoneConfigs เป็น dependency
 
   // สร้าง tables ด้วย useMemo
   const tables = useMemo(() => {
@@ -113,15 +144,9 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
   }, [tablePositions, bookings])
 
   // กรองโต๊ะตามโซนที่เปิดใช้งานและโต๊ะที่ active
-  const activeZones = zoneConfigs.filter((zone) => zone.isActive).map((zone) => zone.id)
   const activeTables = tables.filter((table) => {
     const tablePos = tablePositions.find((t) => t.id === table.id)
     return activeZones.includes(table.zone) && tablePos?.isActive
-  })
-
-  useEffect(() => {
-    console.log("Active Zones:", activeZones)
-    console.log("Zones length:", activeZones.length)
   })
 
   // ฟังก์ชันตรวจสอบว่าโต๊ะเต็มหรือไม่
@@ -277,56 +302,63 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
           ))}
         </div>
 
-        {/* No Active Zone */}
-        {activeZones.length === 0 && (
-          <Alert variant="destructive" className="mt-4">
-            <Info className="h-4 w-4" />
-            <AlertDescription>ระบบยังไม่เปิดใช้งานในขณะนี้ กรุณาติดต่อผู้ดูแลระบบ</AlertDescription>
-          </Alert>
-        )}
+        <div className="bg-gray-500 text-white px-12 py-6 rounded-lg font-bold text-2xl shadow text-center">
+          เวที
+        </div>
 
         {/* แสดงแผนผังรวม */}
-        {activeZones.length > 0 &&
-          <div className="relative rounded-lg p-4 min-h-[600px] md:min-h-[600px] lg:min-h-[900px] overflow-auto border bg-gray-50 max-w-[360px] md:max-w-[720px] lg:max-w-[1080px] mx-auto">
+        {(isLoading)
+          ? <Loading isLoding={isLoading} />
+          : (allZonesInactive)
+            ? (
+              <Alert variant="destructive" className="mt-4">
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  ระบบยังไม่เปิดใช้งานในขณะนี้ กรุณาติดต่อผู้ดูแลระบบ
+                </AlertDescription>
+              </Alert>
+            )
+            : (
+              <div className="relative rounded-lg p-4 min-h-[600px] md:min-h-[600px] lg:min-h-[900px] overflow-auto border bg-gray-50 max-w-[360px] md:max-w-[720px] lg:max-w-[1080px] mx-auto">
 
-            {/* แสดงโต๊ะทุกโซน */}
-            {activeTables.map((table) => {
-              const isFull = isTableFull(table)
+                {/* แสดงโต๊ะทุกโซน */}
+                {activeTables.map((table) => {
+                  const isFull = isTableFull(table)
 
-              return (
-                <div
-                  key={table.id}
-                  className="absolute"
-                  style={{
-                    left: table.x,
-                    top: table.y,
-                    transition: "all 0.3s ease",
-                  }}
-                >
-                  <button
-                    className={cn(
-                      "w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 rounded-full flex flex-col items-center justify-center shadow-lg border-4 transition-all relative",
-                      getTableColor(table),
-                      isFull ? "cursor-not-allowed" : "hover:scale-105",
-                    )}
-                    onClick={() => handleTableClick(table)}
-                    disabled={isFull}
-                    title={isFull ? "โต๊ะเต็มแล้ว" : `คลิกเพื่อเลือกที่นั่ง - ${getTableStatus(table)}`}
-                  >
-                    <span className="font-bold text-xs md:text-sm lg:text-base">{table.name}</span>
-                    <span className="text-[10px] md:text-xs">{getTableStatus(table)}</span>
-                    {isFull && (
-                      <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 md:p-1">
-                        <Lock className="h-2 w-2 md:h-3 md:w-3 text-white" />
-                      </div>
-                    )}
-                  </button>
-                </div>
-              )
-            })}
-          </div>
+                  return (
+                    <div
+                      key={table.id}
+                      className="absolute"
+                      style={{
+                        left: table.x,
+                        top: table.y,
+                        transition: "all 0.3s ease",
+                      }}
+                    >
+                      <button
+                        className={cn(
+                          "w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 rounded-full flex flex-col items-center justify-center shadow-lg border-4 transition-all relative",
+                          getTableColor(table),
+                          isFull ? "cursor-not-allowed" : "hover:scale-105",
+                        )}
+                        onClick={() => handleTableClick(table)}
+                        disabled={isFull}
+                        title={isFull ? "โต๊ะเต็มแล้ว" : `คลิกเพื่อเลือกที่นั่ง - ${getTableStatus(table)}`}
+                      >
+                        <span className="font-bold text-xs md:text-sm lg:text-base">{table.name}</span>
+                        <span className="text-[10px] md:text-xs">{getTableStatus(table)}</span>
+                        {isFull && (
+                          <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 md:p-1">
+                            <Lock className="h-2 w-2 md:h-3 md:w-3 text-white" />
+                          </div>
+                        )}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )
         }
-
       </div>
     )
   }
