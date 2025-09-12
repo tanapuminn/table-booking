@@ -4,15 +4,18 @@ import { useState, useMemo, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useBooking } from "./booking-provider"
 import { cn } from "@/lib/utils"
 import { Info, InfoIcon as InfoCircle, Lock } from "lucide-react"
-// เพิ่ม import PriceSummary
+// ลบ import Tabs, TabsContent, TabsList, TabsTrigger ออก
+// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+// import { Alert, AlertDescription } from "@/components/ui/alert"
+// import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { PriceSummary } from "./price-summary"
 import axios from "axios"
+import Loading from "@/src/components/Loading"
 
 const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
 
@@ -39,18 +42,19 @@ interface BookingRecord {
   seats: Array<{ tableId: number; seatNumber: number; zone: string }>
   notes?: string
   totalPrice: number
-  status: "confirmed" | "cancelled"
+  status: "pending" | "pending_payment" | "confirmed" | "cancelled" | "payment_timeout"
   bookingDate: string
   paymentProof?: string | null
 }
 
-export function TableMap() {
+export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => void }) {
   const { selectedSeats, setSelectedSeats, zoneConfigs, tablePositions } = useBooking()
   const [selectedTable, setSelectedTable] = useState<Table | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [bookings, setBookings] = useState<BookingRecord[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [allZonesInactive, setAllZonesInactive] = useState(false) // true = ไม่มีโซนที่ active
 
   // ดึงข้อมูลการจองจาก API
   useEffect(() => {
@@ -58,7 +62,7 @@ export function TableMap() {
       try {
         setIsLoading(true)
         const response = await axios.get(`${baseURL}/api/bookings`)
-        setBookings(response.data.filter((booking: BookingRecord) => booking.status === "confirmed"))
+        setBookings(response.data.filter((booking: BookingRecord) => booking.status === "confirmed" || booking.status === "pending_payment"))
         setError(null)
       } catch (err) {
         console.error("Error fetching bookings:", err)
@@ -70,6 +74,40 @@ export function TableMap() {
 
     fetchBookings()
   }, [])
+
+  const handleConfirmSelection = () => {
+    setIsDialogOpen(false)
+    onConfirmSelection?.()  // เรียก scroll หลังปิด dialog
+  }
+
+  const activeZones = zoneConfigs.filter((zone) => zone.isActive).map((zone) => zone.id)
+
+  // ย้ายการคำนวณ allZonesInactive ไปไว้ใน useEffect
+  // const isAllInactive = zoneConfigs.every((zone) => !zone.isActive);
+  // useEffect(() => {
+  //   if (!isAllInactive) {
+  //     setAllZonesInactive(true); // ไม่มีโซนที่ active
+  //   }
+
+  //   console.log("Zones length:", activeZones.length);
+  //   console.log('isAllInactive:', isAllInactive);
+  //   console.log('All zones inactive state:', allZonesInactive);
+  // }, [allZonesInactive, isAllInactive]);
+
+  useEffect(() => {
+    if (zoneConfigs.length === 0) {
+      setAllZonesInactive(false); // ค่าเริ่มต้นเมื่อไม่มีข้อมูล
+      return;
+    }
+    
+    const isAllInactive = zoneConfigs.every((zone) => !zone.isActive);
+    setAllZonesInactive(isAllInactive); // อัปเดต state ตามผลลัพธ์
+
+    console.log("Zones length:", zoneConfigs.length);
+    console.log("Zone config:", zoneConfigs);
+    console.log('isAllInactive:', isAllInactive);
+    console.log('All zones inactive state:', allZonesInactive);
+  }, [zoneConfigs]); // ใช้ zoneConfigs เป็น dependency
 
   // สร้าง tables ด้วย useMemo
   const tables = useMemo(() => {
@@ -90,22 +128,22 @@ export function TableMap() {
         }
       })
 
-      const cellSize = 60
-      const padding = 20
+      const cellSize = window.innerWidth <= 768 ? 40 : 60; // ปรับขนาด cell ตามหน้าจอ
+      const padding = window.innerWidth <= 768 ? 10 : 20; // ปรับ padding ตามหน้าจอ
+      const circleSize = window.innerWidth <= 768 ? 20 : 50;
 
       return {
         id: tablePos.id,
         name: tablePos.name,
         zone: tablePos.zone,
         seats,
-        x: tablePos.x * (cellSize + padding) + 50,
-        y: tablePos.y * (cellSize + padding) + 50,
+        x: tablePos.x * (cellSize + padding) + circleSize,
+        y: tablePos.y * (cellSize + padding) + circleSize,
       }
     })
   }, [tablePositions, bookings])
 
   // กรองโต๊ะตามโซนที่เปิดใช้งานและโต๊ะที่ active
-  const activeZones = zoneConfigs.filter((zone) => zone.isActive).map((zone) => zone.id)
   const activeTables = tables.filter((table) => {
     const tablePos = tablePositions.find((t) => t.id === table.id)
     return activeZones.includes(table.zone) && tablePos?.isActive
@@ -184,19 +222,6 @@ export function TableMap() {
     }
   }
 
-  const getZoneColor = (zone: string) => {
-    switch (zone) {
-      case "A":
-        return "border-blue-200 bg-blue-50"
-      case "B":
-        return "border-green-200 bg-green-50"
-      case "C":
-        return "border-purple-200 bg-purple-50"
-      default:
-        return "border-gray-200 bg-gray-50"
-    }
-  }
-
   const getTableColor = (table: Table) => {
     const hasSelectedSeats = table.seats.some((seat) => selectedSeats.some((s) => s.id === seat.id))
     const hasBookedSeats = table.seats.some((seat) => seat.isBooked)
@@ -206,11 +231,13 @@ export function TableMap() {
     if (hasSelectedSeats) {
       return "bg-primary border-primary-600 text-primary-foreground"
     } else if (allSeatsBooked) {
-      return "bg-red-200 border-red-400 text-red-800 cursor-not-allowed opacity-60"
+      return "bg-red-400 border-red-400 text-red-800 cursor-not-allowed opacity-90"
     } else if (hasBookedSeats) {
       return "bg-amber-200 border-amber-400 text-amber-800"
     } else {
       switch (table.zone) {
+        case "VIP":
+          return "bg-pink-100 border-pink-300 text-pink-800 hover:bg-pink-200"
         case "A":
           return "bg-blue-100 border-blue-300 text-blue-800 hover:bg-blue-200"
         case "B":
@@ -244,71 +271,94 @@ export function TableMap() {
     return { x, y }
   }
 
-  const renderZoneMap = (zone: string) => {
-    const zoneTables = activeTables.filter((table) => table.zone === zone)
-    const zoneConfig = zoneConfigs.find((z) => z.id === zone)
-
-    if (zoneTables.length === 0) {
-      return <div className="text-center py-8 text-muted-foreground">โซนนี้ปิดให้บริการในขณะนี้</div>
-    }
-
+  // แทนที่ renderZoneMap ด้วยฟังก์ชันใหม่ที่แสดงทุกโต๊ะ
+  const renderAllTables = () => {
     return (
       <div className="space-y-4">
-        {/* แสดงข้อมูลการจองของโซน */}
-        {zoneConfig && !zoneConfig.allowIndividualSeatBooking && (
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertDescription>โซนนี้จองได้เฉพาะทั้งโต๊ะเท่านั้น ไม่สามารถเลือกที่นั่งแยกได้</AlertDescription>
-          </Alert>
-        )}
+        {/* แสดงคำอธิบายสำหรับทุกโซน */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          {zoneConfigs.map((zone) => (
+            <div key={zone.id} className="p-4 rounded-lg border bg-card">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                {zone.name}
+                {!zone.isActive && (
+                  <Badge variant="secondary" className="text-xs">
+                    ปิด
+                  </Badge>
+                )}
+              </h3>
+              <p className="text-sm text-muted-foreground">{zone.description}</p>
+              <div className="mt-2 space-y-1">
+                <div className="flex items-center gap-1">
+                  <InfoCircle className="h-3 w-3 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">
+                    {zone.allowIndividualSeatBooking
+                      ? `ราคา: ${zone.seatPrice} บาท/ที่นั่ง หรือ ${zone.tablePrice} บาท/โต๊ะ`
+                      : `ราคา: ${zone.tablePrice} บาท/โต๊ะ`}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
 
-        {/* เพิ่ม grid layout เพื่อให้โต๊ะวางตามตำแหน่งที่กำหนดใน table-layout-editor */}
-        <div className={cn("relative rounded-lg p-4 min-h-[600px] overflow-auto", getZoneColor(zone))}>
-          {/* สร้าง grid เพื่อแสดงตำแหน่งโต๊ะ */}
-          <div className="grid grid-cols-10 gap-4 opacity-10 pointer-events-none absolute inset-0 p-4">
-            {Array.from({ length: 100 }, (_, i) => (
-              <div key={i} className="w-full h-16 border border-dashed border-gray-300 rounded"></div>
-            ))}
-          </div>
+        <div className="bg-gray-500 text-white px-12 py-6 rounded-lg font-bold text-2xl shadow text-center">
+          เวที
+        </div>
 
-          {zoneTables.map((table) => {
-            const isFull = isTableFull(table)
+        {/* แสดงแผนผังรวม */}
+        {(isLoading)
+          ? <Loading isLoding={isLoading} />
+          : (allZonesInactive)
+            ? (
+              <Alert variant="destructive" className="mt-4">
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  ระบบยังไม่เปิดใช้งานในขณะนี้ กรุณาติดต่อผู้ดูแลระบบ
+                </AlertDescription>
+              </Alert>
+            )
+            : (
+              <div className="relative rounded-lg p-4 min-h-[600px] md:min-h-[600px] lg:min-h-[900px] overflow-auto border bg-gray-50 max-w-[360px] md:max-w-[720px] lg:max-w-[1080px] mx-auto">
 
-            return (
-              <div
-                key={table.id}
-                className="absolute"
-                style={{
-                  left: table.x,
-                  top: table.y,
-                  transition: "all 0.3s ease",
-                }}
-              >
-                {/* โต๊ะวงกลม */}
-                <button
-                  className={cn(
-                    "w-20 h-20 rounded-full flex flex-col items-center justify-center shadow-lg border-4 transition-all relative",
-                    getTableColor(table),
-                    isFull ? "cursor-not-allowed" : "hover:scale-105",
-                  )}
-                  onClick={() => handleTableClick(table)}
-                  disabled={isFull}
-                  title={isFull ? "โต๊ะเต็มแล้ว" : `คลิกเพื่อเลือกที่นั่ง - ${getTableStatus(table)}`}
-                >
-                  <span className="font-bold">{table.name}</span>
-                  <span className="text-xs">{getTableStatus(table)}</span>
+                {/* แสดงโต๊ะทุกโซน */}
+                {activeTables.map((table) => {
+                  const isFull = isTableFull(table)
 
-                  {/* แสดงไอคอนล็อคสำหรับโต๊ะที่เต็ม */}
-                  {isFull && (
-                    <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-1">
-                      <Lock className="h-3 w-3 text-white" />
+                  return (
+                    <div
+                      key={table.id}
+                      className="absolute"
+                      style={{
+                        left: table.x,
+                        top: table.y,
+                        transition: "all 0.3s ease",
+                      }}
+                    >
+                      <button
+                        className={cn(
+                          "w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 rounded-full flex flex-col items-center justify-center shadow-lg border-4 transition-all relative",
+                          getTableColor(table),
+                          isFull ? "cursor-not-allowed" : "hover:scale-105",
+                        )}
+                        onClick={() => handleTableClick(table)}
+                        disabled={isFull}
+                        title={isFull ? "โต๊ะเต็มแล้ว" : `คลิกเพื่อเลือกที่นั่ง - ${getTableStatus(table)}`}
+                      >
+                        <span className="font-bold text-xs md:text-sm lg:text-base">{table.name}</span>
+                        <span className="text-[10px] md:text-xs">{getTableStatus(table)}</span>
+                        {isFull && (
+                          <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 md:p-1">
+                            <Lock className="h-2 w-2 md:h-3 md:w-3 text-white" />
+                          </div>
+                        )}
+                      </button>
                     </div>
-                  )}
-                </button>
+                  )
+                })}
               </div>
             )
-          })}
-        </div>
+        }
       </div>
     )
   }
@@ -355,50 +405,7 @@ export function TableMap() {
           </p>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="A" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              {zoneConfigs.map((zone) => (
-                <TabsTrigger key={zone.id} value={zone.id} disabled={!zone.isActive} className="relative">
-                  {zone.name}
-                  {!zone.isActive && (
-                    <Badge variant="secondary" className="ml-2 text-xs">
-                      ปิด
-                    </Badge>
-                  )}
-                  {zone.isActive && !zone.allowIndividualSeatBooking && (
-                    <Badge variant="outline" className="ml-2 text-xs">
-                      ทั้งโต๊ะ
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-
-            {zoneConfigs.map((zone) => (
-              <TabsContent key={zone.id} value={zone.id} className="mt-4">
-                <div className="mb-4">
-                  <h3 className="text-lg font-semibold">{zone.name}</h3>
-                  <p className="text-sm text-muted-foreground">{zone.description}</p>
-                  <div className="flex flex-wrap items-center gap-4 mt-2">
-                    <p className="text-xs text-muted-foreground">โซนนี้มี 20 โต๊ะ (180 ที่นั่ง) - แต่ละโต๊ะมี 9 ที่นั่ง</p>
-                    <Badge variant={zone.allowIndividualSeatBooking ? "default" : "secondary"} className="text-xs">
-                      {zone.allowIndividualSeatBooking ? "จองรายที่นั่งได้" : "จองทั้งโต๊ะเท่านั้น"}
-                    </Badge>
-
-                    <div className="flex items-center gap-1">
-                      <InfoCircle className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">
-                        {zone.allowIndividualSeatBooking
-                          ? `ราคา: ${zone.seatPrice} บาท/ที่นั่ง หรือ ${zone.tablePrice} บาท/โต๊ะ`
-                          : `ราคา: ${zone.tablePrice} บาท/โต๊ะ`}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                {renderZoneMap(zone.id)}
-              </TabsContent>
-            ))}
-          </Tabs>
+          {renderAllTables()}
         </CardContent>
       </Card>
 
@@ -503,7 +510,7 @@ export function TableMap() {
               ปิด
             </Button>
             <Button
-              onClick={() => setIsDialogOpen(false)}
+              onClick={handleConfirmSelection}
               disabled={
                 !selectedTable || !selectedTable.seats.some((seat) => selectedSeats.some((s) => s.id === seat.id))
               }

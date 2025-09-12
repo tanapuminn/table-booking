@@ -184,16 +184,16 @@ function TicketContent() {
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-2">หลักฐานการชำระเงิน</p>
               <img
-                src={`${baseURL}/${booking.paymentProof}`}
+                src={`${booking.paymentProof}`}
                 alt="Payment proof"
-                className="w-full h-48 object-cover rounded-lg"
+                className="w-full h-full object-cover rounded-lg"
               />
             </div>
           )}
 
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <p className="text-sm text-yellow-800">
-              <strong>หมายเหตุ:</strong> กรุณาบันทึกภาพตั๋วนี้ไว้เป็นหลักฐานการจอง
+              <strong>หมายเหตุ:</strong> กรุณาบันทึกภาพ(Capture)ตั๋วนี้ไว้เป็นหลักฐานการจอง
             </p>
           </div>
         </CardContent>

@@ -77,7 +77,7 @@ export default function DashboardPage() {
 
 
 
-  const handleChangeStatus = async (bookingId: string, newStatus: "confirmed" | "cancelled") => {
+  const handleChangeStatus = async (bookingId: string, newStatus: "pending" | "confirmed" | "cancelled") => {
     try {
       const confirmDelete = window.confirm("คุณแน่ใจหรือไม่ว่าต้องการยกเลิกการจองนี้?");
       if (!confirmDelete) return;
@@ -220,6 +220,12 @@ export default function DashboardPage() {
         return "bg-green-100 text-green-800";
       case "cancelled":
         return "bg-red-100 text-red-800";
+      case "pending_payment":
+        return "bg-yellow-100 text-yellow-800";
+      case "payment_timeout":
+        return "bg-orange-100 text-orange-800";
+      case "pending":
+        return "bg-blue-100 text-blue-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -231,6 +237,12 @@ export default function DashboardPage() {
         return "ยืนยันแล้ว";
       case "cancelled":
         return "ยกเลิกแล้ว";
+      case "pending_payment":
+        return "รอชำระเงิน";
+      case "payment_timeout":
+        return "หมดเวลาชำระ";
+      case "pending":
+        return "รอดำเนินการ";
       default:
         return status;
     }
@@ -304,6 +316,7 @@ export default function DashboardPage() {
         {/* จัดการการจอง */}
         <TabsContent value="bookings" className="space-y-6">
           <div className="flex flex-col md:flex-row md:items-center md:space-x-4 space-y-2 md:space-y-0">
+
             <div className="flex items-center space-x-2">
               <Search className="h-4 w-4 text-muted-foreground" />
               <Input
@@ -322,11 +335,25 @@ export default function DashboardPage() {
                 <SelectContent>
                   <SelectItem value="all">สถานะทั้งหมด</SelectItem>
                   <SelectItem value="confirmed">ยืนยันแล้ว</SelectItem>
+                  <SelectItem value="pending_payment">รอชำระเงิน</SelectItem>
+                  <SelectItem value="payment_timeout">หมดเวลาชำระ</SelectItem>
                   <SelectItem value="cancelled">ยกเลิกแล้ว</SelectItem>
+                  <SelectItem value="pending">รอดำเนินการ</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
+            <Button
+              variant="secondary"
+              onClick={() => {
+                window.open(`${baseURL}/api/bookings/export/xlsx`, "_blank");
+              }}
+            >
+              📄 ส่งออกรายงาน Excel
+            </Button>
+
           </div>
+
 
           {/* ประวัติการจอง */}
           <div className="grid gap-4">
@@ -357,22 +384,24 @@ export default function DashboardPage() {
                             </DialogHeader>
                             <div className="mt-4">
                               <img
-                                src={`${baseURL}/${booking.paymentProof}` || "/placeholder.svg"}
+                                src={`${booking.paymentProof}`}
                                 alt="Payment proof"
-                                className="w-full rounded-lg"
+                                className="w-full object-cover rounded-lg"
                               />
                             </div>
                           </DialogContent>
                         </Dialog>
                       )}
 
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm" onClick={() => handleOpenTicket(booking.id)}>
-                            <Ticket className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                      </Dialog>
+                      {booking.status === "confirmed" && (
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm" onClick={() => handleOpenTicket(booking.id)}>
+                              <Ticket className="h-4 w-4" />
+                            </Button>
+                          </DialogTrigger>
+                        </Dialog>
+                      )}
 
                       <Dialog>
                         <DialogTrigger asChild>
@@ -420,7 +449,7 @@ export default function DashboardPage() {
                               //   ยืนยันการจอง
                               // </AlertDialogAction>
                             )}
-                            {booking.status !== "cancelled" && (
+                            {(booking.status !== "cancelled" && booking.status !== "payment_timeout") && (
                               <AlertDialogAction
                                 onClick={() => handleCancelBooking(booking.id)}
                                 className="text-white bg-red-600 hover:bg-red-400"
@@ -443,12 +472,14 @@ export default function DashboardPage() {
                     <div>
                       <Label className="text-sm font-medium">ที่นั่งที่จอง</Label>
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {booking.seats.map((seat, index) => (
-                          <Badge key={index} variant="secondary">
-                            {seat.zone ? `${seat.zone}${seat.tableId % 20 || 20}` : `โต๊ะ ${seat.tableId}`} ที่{" "}
-                            {seat.seatNumber}
-                          </Badge>
-                        ))}
+                        {booking.seats.map((seat, index) => {
+                          return (
+                            <Badge key={index} variant="secondary">
+                              {`โต๊ะ ${seat.tableName}`} ที่{" "}
+                              {seat.seatNumber}
+                            </Badge>
+                          )
+                        })}
                       </div>
                     </div>
                     <div>
