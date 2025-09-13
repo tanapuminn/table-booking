@@ -183,7 +183,7 @@ export default function HomePage() {
                                     return (
                                         <span
                                             key={seat.id}
-                                            className={`${isVip ? 'bg-purple-600' : 'bg-blue-600'} text-white px-2 py-1 rounded text-sm`}
+                                            className={`${isVip ? 'bg-pink-100' : 'bg-blue-100'} text-black px-2 py-1 rounded text-sm`}
                                         >
                                             โต๊ะ {table?.name} ที่นั่ง {seat.seatNumber}
                                             {isVip && ' (VIP)'}
