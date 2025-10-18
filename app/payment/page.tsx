@@ -28,7 +28,7 @@ export default function PaymentPage() {
   const [totalPrice, setTotalPrice] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<"qrcode" | "upload">("qrcode");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(20 * 60); // 20 minutes = 1200 seconds
+  const [timeLeft, setTimeLeft] = useState(0); // 0 minutes
   const [isTimerActive, setIsTimerActive] = useState(true);
   const [pendingBookingId, setPendingBookingId] = useState<string | null>(null);
   const [bookingData, setBookingData] = useState<any>(null);
@@ -80,9 +80,9 @@ export default function PaymentPage() {
           const now = new Date();
           const remainingTime = Math.max(0, Math.floor((deadline.getTime() - now.getTime()) / 1000));
           console.log("Remaining time (seconds):", remainingTime);
-          setTimeLeft(remainingTime || 20 * 60); // ถ้า remainingTime เป็น 0 ให้ใช้ 20 นาที
+          setTimeLeft(remainingTime); // ถ้า remainingTime เป็น 0 ให้ใช้ 0 นาที
         } else {
-          setTimeLeft(20 * 60); // ถ้าไม่มี deadline ให้ใช้ 20 นาที
+          setTimeLeft(0); // ถ้าไม่มี deadline ให้ใช้ 0 นาที
         }
 
       } catch (error) {
