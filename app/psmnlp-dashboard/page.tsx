@@ -35,6 +35,7 @@ import { useBooking, type BookingRecord } from "@/components/booking-provider";
 import { TableLayoutEditor } from "@/components/table-layout-editor";
 import { useRouter } from "next/navigation";
 import axios from "axios";
+import dayjs from "dayjs";
 
 const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
 
@@ -79,8 +80,10 @@ export default function DashboardPage() {
 
   const handleChangeStatus = async (bookingId: string, newStatus: "pending" | "confirmed" | "cancelled") => {
     try {
-      const confirmDelete = window.confirm("คุณแน่ใจหรือไม่ว่าต้องการยกเลิกการจองนี้?");
-      if (!confirmDelete) return;
+      if (newStatus !== "confirmed") {
+        const confirmDelete = window.confirm("คุณแน่ใจหรือไม่ว่าต้องการยกเลิกการจองนี้?");
+        if (!confirmDelete) return;
+      }
       // เรียก API เพื่ออัปเดตสถานะ
       await axios.patch(`${baseURL}/api/bookings/${bookingId}`, { status: newStatus });
 
@@ -367,7 +370,7 @@ export default function DashboardPage() {
                         <Badge className={getStatusColor(booking.status)}>{getStatusText(booking.status)}</Badge>
                       </CardTitle>
                       <p className="text-sm text-muted-foreground">
-                        รหัสการจอง: {booking.id} | {booking.bookingDate}
+                        รหัสการจอง: {booking.id} | {dayjs(booking.bookingDate).format("DD/MM/YYYY HH:mm:ss")}
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -437,17 +440,20 @@ export default function DashboardPage() {
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+                            {(booking.status === "pending_payment") && (
+                              <AlertDialogAction
+                                onClick={() => handleChangeStatus(booking.id, "confirmed")}
+                                className="text-white bg-green-600 hover:bg-green-400"
+                              >
+                                ยืนยันการจอง
+                              </AlertDialogAction>
+                            )}
                             {booking.status !== "confirmed" && (
                               <AlertDialogAction
                                 onClick={() => handleDeleteBooking(booking.id)}
                               >
                                 ลบ
                               </AlertDialogAction>
-                              // <AlertDialogAction
-                              //   onClick={() => handleChangeStatus(booking.id, "confirmed")}
-                              // >
-                              //   ยืนยันการจอง
-                              // </AlertDialogAction>
                             )}
                             {(booking.status !== "cancelled" && booking.status !== "payment_timeout") && (
                               <AlertDialogAction
