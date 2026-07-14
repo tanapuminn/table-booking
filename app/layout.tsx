@@ -2,7 +2,9 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
+import { AuthProvider } from "@/components/auth-provider"
 import { BookingProvider } from "@/components/booking-provider"
+import { Header } from "@/components/header"
 import { Toaster } from "@/components/ui/toaster"
 import { ErrorBoundary } from "../components/error-boundary"
 
@@ -28,18 +30,15 @@ export default function RootLayout({
     <html lang="th">
       <body className={inter.className}>
         <ErrorBoundary>
-          <BookingProvider>
-            <div className="min-h-screen bg-background">
-              <header className="border-b">
-                <div className="container mx-auto px-4 py-4">
-                  <h1 className="text-2xl font-bold text-center">ระบบจองโต๊ะจีน</h1>
-                  <h1 className="text-2xl font-bold text-center">งานร้อยดวงใจ สายใยประสานมิตร ครั้งที่ 21</h1>
-                </div>
-              </header>
-              <main className="container mx-auto px-4 py-8">{children}</main>
-            </div>
-            <Toaster />
-          </BookingProvider>
+          <AuthProvider>
+            <BookingProvider>
+              <div className="min-h-screen bg-background">
+                <Header />
+                <main className="container mx-auto px-4 py-8">{children}</main>
+              </div>
+              <Toaster />
+            </BookingProvider>
+          </AuthProvider>
         </ErrorBoundary>
       </body>
     </html>

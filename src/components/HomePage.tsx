@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { TableMap } from "@/components/table-map"
 import { useBooking } from "@/components/booking-provider"
+import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
 import { Settings, User, Copyright, Loader2 } from "lucide-react"
 
@@ -16,6 +17,7 @@ import { Settings, User, Copyright, Loader2 } from "lucide-react"
 export default function HomePage() {
     const router = useRouter()
     const { selectedSeats, setBookingInfo, calculateTotalPrice, tablePositions } = useBooking()
+    const { user } = useAuth()
     const { toast } = useToast()
 
     const [customerInfo, setCustomerInfo] = useState({
@@ -26,7 +28,18 @@ export default function HomePage() {
     const [isLoading, setIsLoading] = useState(false)
 
     const formRef = useRef<HTMLDivElement | null>(null)
+    const hasPrefilledUserRef = useRef(false)
 
+    useEffect(() => {
+        if (!user || hasPrefilledUserRef.current) return
+
+        setCustomerInfo((prev) => ({
+            ...prev,
+            name: prev.name || user.fullname || "",
+            phone: prev.phone || user.phone || "",
+        }))
+        hasPrefilledUserRef.current = true
+    }, [user])
     const scrollToForm = () => {
         setTimeout(() => {
             formRef.current?.scrollIntoView({ behavior: "smooth" })
