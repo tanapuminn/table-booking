@@ -51,29 +51,8 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
   const { selectedSeats, setSelectedSeats, zoneConfigs, tablePositions } = useBooking()
   const [selectedTable, setSelectedTable] = useState<Table | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [bookings, setBookings] = useState<BookingRecord[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [allZonesInactive, setAllZonesInactive] = useState(false) // true = ไม่มีโซนที่ active
-
-  // ดึงข้อมูลการจองจาก API
-  useEffect(() => {
-    const fetchBookings = async () => {
-      try {
-        setIsLoading(true)
-        const response = await axios.get(`${baseURL}/api/bookings`)
-        setBookings(response.data.filter((booking: BookingRecord) => booking.status === "confirmed" || booking.status === "pending_payment"))
-        setError(null)
-      } catch (err) {
-        console.error("Error fetching bookings:", err)
-        setError("ไม่สามารถโหลดข้อมูลการจองได้ กรุณาลองใหม่")
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchBookings()
-  }, [])
+  const [isLoading, setIsLoading] = useState(false)
+  const [allZonesInactive, setAllZonesInactive] = useState(false)
 
   const handleConfirmSelection = () => {
     setIsDialogOpen(false)
@@ -107,18 +86,14 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
     console.log("Zone config:", zoneConfigs);
     console.log('isAllInactive:', isAllInactive);
     console.log('All zones inactive state:', allZonesInactive);
-  }, [zoneConfigs]); // ใช้ zoneConfigs เป็น dependency
+  }, [zoneConfigs, allZonesInactive]); // ใช้ zoneConfigs เป็น dependency
 
   // สร้าง tables ด้วย useMemo
   const tables = useMemo(() => {
     return tablePositions.map((tablePos) => {
       const seats = tablePos.seats.map((seat) => {
         // ตรวจสอบว่าที่นั่งนี้ถูกจองแล้วจาก bookings หรือไม่
-        const isBookedFromBookings = bookings.some((booking) =>
-          booking.seats.some(
-            (bookedSeat) => bookedSeat.tableId === tablePos.id && bookedSeat.seatNumber === seat.seatNumber
-          )
-        )
+        const isBookedFromBookings = seat.isBooked
 
         return {
           id: `${tablePos.id} -${seat.seatNumber}`,
@@ -141,7 +116,7 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
         y: tablePos.y * (cellSize + padding) + circleSize,
       }
     })
-  }, [tablePositions, bookings])
+  }, [tablePositions])
 
   // กรองโต๊ะตามโซนที่เปิดใช้งานและโต๊ะที่ active
   const activeTables = tables.filter((table) => {

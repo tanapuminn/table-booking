@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, use } from "react"
+import Image from "next/image"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -84,13 +85,7 @@ export function PaymentQRCode({ amount, recipientName = "พัชรี เว�
           />
         </div> */}
         <div className="bg-white p-3 rounded-lg shadow-sm border">
-          <img
-            src={`https://i.pinimg.com/736x/02/31/87/023187a2f2dc47bbdc809b43c7667b3a.jpg`}
-            alt={`เลขที่บัญชีธนาคาร`}
-            className="mx-auto"
-            width={qrSize}
-            height={qrSize}
-          />
+          <Image src="https://i.pinimg.com/736x/02/31/87/023187a2f2dc47bbdc809b43c7667b3a.jpg" alt="เลขที่บัญชีธนาคาร" className="mx-auto" width={qrSize} height={qrSize} unoptimized />
         </div>
 
 

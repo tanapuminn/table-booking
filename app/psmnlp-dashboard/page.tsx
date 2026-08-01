@@ -1,6 +1,7 @@
 "use client";
 
 import type React from "react";
+import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
@@ -348,7 +349,7 @@ export default function DashboardPage() {
                       </DialogTrigger>
                       <DialogContent>
                         <DialogHeader><DialogTitle>หลักฐานการชำระเงิน</DialogTitle></DialogHeader>
-                        <img src={booking.paymentProof} alt="Payment proof" className="w-full rounded-lg mt-4" />
+                        <Image src={booking.paymentProof} alt="Payment proof" width={800} height={600} unoptimized className="w-full rounded-lg mt-4" />
                       </DialogContent>
                     </Dialog>
                   )}

@@ -1,6 +1,7 @@
 "use client";
 
 import type React from "react";
+import Image from "next/image"
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -64,7 +65,9 @@ export default function PaymentPage() {
 
       try {
         // ดึงข้อมูลการจองจาก API
-        const response = await fetch(`${baseURL}/api/bookings/${bookingId}`);
+        const response = await fetch(`${baseURL}/api/bookings/${bookingId}`, {
+          credentials: 'include',
+        });
         if (!response.ok) {
           throw new Error('ไม่พบข้อมูลการจอง');
         }
@@ -99,6 +102,8 @@ export default function PaymentPage() {
     };
 
     loadPendingBooking();
+    // Initial booking context is intentionally loaded once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Timer countdown effect
@@ -123,17 +128,15 @@ export default function PaymentPage() {
       if (!currentBookingId) return;
 
       try {
-        const response = await axios.post(`${baseURL}/api/bookings/check-expired`);
-        const pendingBookings = response.data.pendingBookings;
-        const currentBooking = pendingBookings.find((b: any) => b.id === currentBookingId);
-        
-        if (currentBooking) {
-          const serverRemainingTime = Math.floor(currentBooking.remainingTime / 1000); // Convert to seconds
-          if (Math.abs(serverRemainingTime - timeLeft) > 5) { // Only sync if difference is more than 5 seconds
+        const response = await axios.get(`${baseURL}/api/bookings/${currentBookingId}`);
+        const currentBooking = response.data;
+
+        if (currentBooking.status === 'pending_payment' && currentBooking.paymentDeadline) {
+          const serverRemainingTime = Math.max(0, Math.floor((new Date(currentBooking.paymentDeadline).getTime() - Date.now()) / 1000));
+          if (Math.abs(serverRemainingTime - timeLeft) > 5) {
             setTimeLeft(serverRemainingTime);
           }
         } else {
-          // Booking not found in pending list - might have expired
           setIsTimerActive(false);
           handlePaymentTimeout();
         }
@@ -150,6 +153,8 @@ export default function PaymentPage() {
         clearInterval(timerSyncInterval);
       }
     };
+  // Timer callbacks/state are intentionally captured per active timer session.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isTimerActive, pendingBookingId, timeLeft]);
 
   // Add this cleanup effect
@@ -238,44 +243,14 @@ export default function PaymentPage() {
     const currentBookingId = pendingBookingId || sessionStorage.getItem('pendingBookingId');
     if (!currentBookingId) return;
 
-    // Function to check expired status
-    const checkExpiredStatus = async (): Promise<boolean> => {
-      try {
-        const res = await axios.post(`${baseURL}/api/bookings/check-expired`,
-          { headers: { "Content-Type": "application/json" } }
-        );
-        return res.status === 200;
-      } catch (error) {
-        console.error("Error checking expired status:", error);
-        return false;
-      }
-    };
-
-    // Keep checking until we get a success response
-    const retryInterval = setInterval(async () => {
-      const isExpired = await checkExpiredStatus();
-
-      if (isExpired) {
-        clearInterval(retryInterval);
-
-        toast({
-          title: "หมดเวลาชำระเงิน",
-          description: "การจองของคุณถูกยกเลิกแล้ว",
-          variant: "destructive",
-        });
-
-        // Clear booking data and redirect
-        clearBooking();
-        sessionStorage.removeItem('pendingBookingId');
-        router.push("/");
-      }
-    }, 5000); // Check every 5 seconds
-
-    // Clear interval after 2 minutes to prevent infinite checking
-    setTimeout(() => {
-      clearInterval(retryInterval);
-      console.log("Stopped checking expired status after timeout");
-    }, 2 * 60 * 1000);
+    toast({
+      title: "หมดเวลาชำระเงิน",
+      description: "กรุณาสร้างการจองใหม่อีกครั้ง",
+      variant: "destructive",
+    });
+    clearBooking();
+    sessionStorage.removeItem('pendingBookingId');
+    router.push("/");
   };
 
   const handleConfirmPayment = async () => {
@@ -308,7 +283,6 @@ export default function PaymentPage() {
         // ใช้ confirm payment API สำหรับ upload
         const formData = new FormData();
         formData.append("paymentProof", paymentImage);
-        formData.append("amount", totalPrice.toString());
 
         const response = await axios.post(`${baseURL}/api/bookings/${currentBookingId}/confirm-payment`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
@@ -567,11 +541,7 @@ export default function PaymentPage() {
                 <div className="mt-4">
                   <Label className="text-sm font-medium">ตัวอย่างรูปภาพ</Label>
                   <div className="mt-2 border rounded-lg overflow-hidden">
-                    <img
-                      src={imagePreview || "/placeholder.svg"}
-                      alt="Payment proof"
-                      className="w-full h-full object-cover"
-                    />
+                    <Image src={imagePreview || "/placeholder.svg"} alt="Payment proof" width={800} height={600} unoptimized className="w-full h-full object-cover" />
                   </div>
                 </div>
               )}

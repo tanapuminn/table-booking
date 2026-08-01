@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -183,11 +184,7 @@ function TicketContent() {
           {booking.paymentProof && (
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-2">หลักฐานการชำระเงิน</p>
-              <img
-                src={`${booking.paymentProof}`}
-                alt="Payment proof"
-                className="w-full h-full object-cover rounded-lg"
-              />
+              <Image src={booking.paymentProof} alt="Payment proof" width={800} height={600} unoptimized className="w-full h-full object-cover rounded-lg" />
             </div>
           )}
 
