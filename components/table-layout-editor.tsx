@@ -31,18 +31,18 @@ export function TableLayoutEditor() {
   const [isEditMode, setIsEditMode] = useState(false)
   const [draggedTable, setDraggedTable] = useState<TablePosition | null>(null)
 
-  // เน€เธเธดเนเธก state เธชเธณเธซเธฃเธฑเธเธเธเธฒเธ” grid
+  // เพิ่ม state สำหรับขนาด grid
   const [gridSize, setGridSize] = useState({ rows: 10, cols: 10 })
   const [newGridSize, setNewGridSize] = useState({ rows: 10, cols: 10 })
   const [showGridSizeDialog, setShowGridSizeDialog] = useState(false)
 
   const cellSize = 60
 
-  // เธเธฃเธญเธเนเธ•เนเธฐเธ•เธฒเธกเนเธเธเธ—เธตเนเน€เธฅเธทเธญเธ
+  // กรองโต๊ะตามโซนที่เลือก
   const zoneTables = tablePositions.filter((table) => table.zone === selectedZone)
   const activeZone = zoneConfigs.find((zone) => zone.id === selectedZone)
 
-  // เนเธซเธฅเธ”เธเธเธฒเธ” grid เธเธฒเธ localStorage เน€เธกเธทเนเธญ component mount
+  // โหลดขนาด grid จาก localStorage เมื่อ component mount
   useEffect(() => {
     try {
       const savedGridSize = localStorage.getItem(`gridSize_${selectedZone}`)
@@ -56,7 +56,7 @@ export function TableLayoutEditor() {
     }
   }, [selectedZone])
 
-  // เธเธฑเธเธ—เธถเธเธเธเธฒเธ” grid เธฅเธ localStorage เน€เธกเธทเนเธญเธกเธตเธเธฒเธฃเน€เธเธฅเธตเนเธขเธเนเธเธฅเธ
+  // บันทึกขนาด grid ลง localStorage เมื่อมีการเปลี่ยนแปลง
   useEffect(() => {
     try {
       localStorage.setItem(`gridSize_${selectedZone}`, JSON.stringify(gridSize))
@@ -71,8 +71,8 @@ export function TableLayoutEditor() {
     const existingTable = zoneTables.find((table) => table.x === x && table.y === y)
     if (existingTable) {
       toast({
-        title: "เธ•เธณเนเธซเธเนเธเธเธตเนเธกเธตเนเธ•เนเธฐเนเธฅเนเธง",
-        description: "เธเธฃเธธเธ“เธฒเน€เธฅเธทเธญเธเธ•เธณเนเธซเธเนเธเธญเธทเนเธ เธซเธฃเธทเธญเธฅเธเนเธ•เนเธฐเน€เธ”เธดเธกเธเนเธญเธ",
+        title: "ตำแหน่งนี้มีโต๊ะแล้ว",
+        description: "กรุณาเลือกตำแหน่งอื่น หรือลบโต๊ะเดิมก่อน",
         variant: "destructive",
       })
       return
@@ -81,13 +81,13 @@ export function TableLayoutEditor() {
     try {
     await addTable(selectedZone, x, y);
     toast({
-      title: "เน€เธเธดเนเธกเนเธ•เนเธฐเธชเธณเน€เธฃเนเธ",
-      description: `เน€เธเธดเนเธกเนเธ•เนเธฐเนเธเนเธเธ ${selectedZone} เธ—เธตเนเธ•เธณเนเธซเธเนเธ (${x}, ${y})`,
+      title: "เพิ่มโต๊ะสำเร็จ",
+      description: `เพิ่มโต๊ะในโซน ${selectedZone} ที่ตำแหน่ง (${x}, ${y})`,
     });
   } catch (error) {
     toast({
-      title: "เน€เธเธดเธ”เธเนเธญเธเธดเธ”เธเธฅเธฒเธ”",
-      description: (error instanceof Error ? error.message : "เนเธกเนเธชเธฒเธกเธฒเธฃเธ–เน€เธเธดเนเธกเนเธ•เนเธฐเนเธ”เน"),
+      title: "เกิดข้อผิดพลาด",
+      description: (error instanceof Error ? error.message : "ไม่สามารถเพิ่มโต๊ะได้"),
       variant: "destructive",
     });
   }
@@ -101,13 +101,13 @@ const handleTableDragStart = (table: TablePosition) => {
 const handleTableDrop = (x: number, y: number) => {
   if (!draggedTable || !isEditMode) return
 
-  // เธ•เธฃเธงเธเธชเธญเธเธงเนเธฒเธ•เธณเนเธซเธเนเธเนเธซเธกเนเธงเนเธฒเธเธซเธฃเธทเธญเนเธกเน
+  // ตรวจสอบว่าตำแหน่งใหม่ว่างหรือไม่
   const existingTable = zoneTables.find((table) => table.x === x && table.y === y && table.id !== draggedTable.id)
 
   if (existingTable) {
     toast({
-      title: "เนเธกเนเธชเธฒเธกเธฒเธฃเธ–เธขเนเธฒเธขเนเธ”เน",
-      description: "เธ•เธณเนเธซเธเนเธเธเธตเนเธกเธตเนเธ•เนเธฐเธญเธทเนเธเธญเธขเธนเนเนเธฅเนเธง",
+      title: "ไม่สามารถย้ายได้",
+      description: "ตำแหน่งนี้มีโต๊ะอื่นอยู่แล้ว",
       variant: "destructive",
     })
     setDraggedTable(null)
@@ -116,8 +116,8 @@ const handleTableDrop = (x: number, y: number) => {
 
   updateTablePosition(draggedTable.id, x, y)
   toast({
-    title: "เธขเนเธฒเธขเนเธ•เนเธฐเธชเธณเน€เธฃเนเธ",
-    description: `เธขเนเธฒเธข${draggedTable.name} เนเธเธขเธฑเธเธ•เธณเนเธซเธเนเธ (${x}, ${y})`,
+    title: "ย้ายโต๊ะสำเร็จ",
+    description: `ย้าย${draggedTable.name} ไปยังตำแหน่ง (${x}, ${y})`,
   })
   setDraggedTable(null)
 }
@@ -125,13 +125,13 @@ const handleTableDrop = (x: number, y: number) => {
 const handleRemoveTable = (tableId: number) => {
   removeTable(tableId)
   toast({
-    title: "เธฅเธเนเธ•เนเธฐเธชเธณเน€เธฃเนเธ",
-    description: "เธฅเธเนเธ•เนเธฐเธญเธญเธเธเธฒเธเธฃเธฐเธเธเน€เธฃเธตเธขเธเธฃเนเธญเธขเนเธฅเนเธง",
+    title: "ลบโต๊ะสำเร็จ",
+    description: "ลบโต๊ะออกจากระบบเรียบร้อยแล้ว",
   })
 }
 
 const resetLayout = () => {
-  // เธฃเธตเน€เธเนเธ•เน€เธเนเธเธ•เธณเนเธซเธเนเธเน€เธฃเธดเนเธกเธ•เนเธ
+  // รีเซ็ตเป็นตำแหน่งเริ่มต้น
   const defaultPositions = Array.from({ length: 20 }, (_, i) => ({
     x: (i % 5) * 2,
     y: Math.floor(i / 5) * 2,
@@ -144,20 +144,20 @@ const resetLayout = () => {
   })
 
   toast({
-    title: "เธฃเธตเน€เธเนเธ•เน€เธฅเธขเนเน€เธญเธฒเธ•เนเธชเธณเน€เธฃเนเธ",
-    description: `เธฃเธตเน€เธเนเธ•เธ•เธณเนเธซเธเนเธเนเธ•เนเธฐเนเธเนเธเธ ${selectedZone} เน€เธเนเธเธเนเธฒเน€เธฃเธดเนเธกเธ•เนเธ`,
+    title: "รีเซ็ตเลย์เอาต์สำเร็จ",
+    description: `รีเซ็ตตำแหน่งโต๊ะในโซน ${selectedZone} เป็นค่าเริ่มต้น`,
   })
 }
 
-// เน€เธเธดเนเธกเธเธฑเธเธเนเธเธฑเธเธชเธณเธซเธฃเธฑเธเธเธฃเธฑเธเธเธเธฒเธ” grid
+// เพิ่มฟังก์ชันสำหรับปรับขนาด grid
 const handleResizeGrid = () => {
-  // เธ•เธฃเธงเธเธชเธญเธเธงเนเธฒเธกเธตเนเธ•เนเธฐเธ—เธตเนเธญเธขเธนเนเธเธญเธเธเธญเธเน€เธเธ•เนเธซเธกเนเธซเธฃเธทเธญเนเธกเน
+  // ตรวจสอบว่ามีโต๊ะที่อยู่นอกขอบเขตใหม่หรือไม่
   const tablesOutOfBounds = zoneTables.filter((table) => table.x >= newGridSize.cols || table.y >= newGridSize.rows)
 
   if (tablesOutOfBounds.length > 0) {
     toast({
-      title: "เนเธกเนเธชเธฒเธกเธฒเธฃเธ–เธเธฃเธฑเธเธเธเธฒเธ”เนเธ”เน",
-      description: `เธกเธตเนเธ•เนเธฐ ${tablesOutOfBounds.length} เนเธ•เนเธฐเธ—เธตเนเธเธฐเธญเธขเธนเนเธเธญเธเธเธญเธเน€เธเธ•เนเธซเธกเน เธเธฃเธธเธ“เธฒเธขเนเธฒเธขเนเธ•เนเธฐเธเนเธญเธ`,
+      title: "ไม่สามารถปรับขนาดได้",
+      description: `มีโต๊ะ ${tablesOutOfBounds.length} โต๊ะที่จะอยู่นอกขอบเขตใหม่ กรุณาย้ายโต๊ะก่อน`,
       variant: "destructive",
     })
     return
@@ -167,8 +167,8 @@ const handleResizeGrid = () => {
   setShowGridSizeDialog(false)
 
   toast({
-    title: "เธเธฃเธฑเธเธเธเธฒเธ” Grid เธชเธณเน€เธฃเนเธ",
-    description: `เธเธฃเธฑเธเธเธเธฒเธ” Grid เน€เธเนเธ ${newGridSize.rows} เนเธ–เธง x ${newGridSize.cols} เธเธญเธฅเธฑเธกเธเน`,
+    title: "ปรับขนาด Grid สำเร็จ",
+    description: `ปรับขนาด Grid เป็น ${newGridSize.rows} แถว x ${newGridSize.cols} คอลัมน์`,
   })
 }
 
@@ -207,26 +207,26 @@ return (
   <div className="space-y-6">
     <Card>
       <CardHeader>
-        <div className="flex justify-between items-center">
-          <CardTitle className="flex items-center gap-2">
+        <div className="flex flex-wrap justify-between items-center gap-4">
+          <CardTitle className="flex min-w-0 items-center gap-2">
             <Move className="h-5 w-5" />
-            เธเธฑเธ”เธเธฒเธฃเธ•เธณเนเธซเธเนเธเนเธ•เนเธฐ
+            จัดการตำแหน่งโต๊ะ
           </CardTitle>
           <div className="flex gap-2">
             <Switch checked={isEditMode} onCheckedChange={setIsEditMode} id="edit-mode" />
             <Label htmlFor="edit-mode" className="text-sm">
-              เนเธซเธกเธ”เนเธเนเนเธ
+              โหมดแก้ไข
             </Label>
           </div>
         </div>
         <p className="text-sm text-muted-foreground">
-          {isEditMode ? "เธเธฅเธดเธเนเธเธเนเธญเธเธงเนเธฒเธเน€เธเธทเนเธญเน€เธเธดเนเธกเนเธ•เนเธฐ เธซเธฃเธทเธญเธฅเธฒเธเนเธ•เนเธฐเน€เธเธทเนเธญเธขเนเธฒเธขเธ•เธณเนเธซเธเนเธ" : "เน€เธเธดเธ”เนเธซเธกเธ”เนเธเนเนเธเน€เธเธทเนเธญเธเธฑเธ”เธเธฒเธฃเธ•เธณเนเธซเธเนเธเนเธ•เนเธฐ"}
+          {isEditMode ? "คลิกในช่องว่างเพื่อเพิ่มโต๊ะ หรือลากโต๊ะเพื่อย้ายตำแหน่ง" : "เปิดโหมดแก้ไขเพื่อจัดการตำแหน่งโต๊ะ"}
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <Label>เน€เธฅเธทเธญเธเนเธเธ:</Label>
+        <div className="flex flex-wrap justify-between items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <Label>เลือกโซน:</Label>
             <Select value={selectedZone} onValueChange={setSelectedZone}>
               <SelectTrigger className="w-32">
                 <SelectValue />
@@ -240,13 +240,13 @@ return (
               </SelectContent>
             </Select>
             <Badge variant={activeZone?.isActive ? "default" : "secondary"}>
-              {activeZone?.isActive ? "เน€เธเธดเธ”เนเธเนเธเธฒเธ" : "เธเธดเธ”เนเธเนเธเธฒเธ"}
+              {activeZone?.isActive ? "เปิดใช้งาน" : "ปิดใช้งาน"}
             </Badge>
           </div>
 
           {isEditMode && (
             <div className="flex gap-2">
-              {/* เน€เธเธดเนเธกเธเธธเนเธกเธเธฃเธฑเธเธเธเธฒเธ” Grid */}
+              {/* เพิ่มปุ่มปรับขนาด Grid */}
               <Button
                 variant="outline"
                 size="sm"
@@ -254,26 +254,26 @@ return (
                 className="flex items-center gap-1"
               >
                 <Grid className="h-4 w-4 mr-1" />
-                เธเธฃเธฑเธเธเธเธฒเธ” Grid ({gridSize.rows}x{gridSize.cols})
+                ปรับขนาด Grid ({gridSize.rows}x{gridSize.cols})
               </Button>
 
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="outline" size="sm">
                     <RotateCcw className="h-4 w-4 mr-2" />
-                    เธฃเธตเน€เธเนเธ•
+                    รีเซ็ต
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>เธฃเธตเน€เธเนเธ•เน€เธฅเธขเนเน€เธญเธฒเธ•เน</AlertDialogTitle>
+                    <AlertDialogTitle>รีเซ็ตเลย์เอาต์</AlertDialogTitle>
                     <AlertDialogDescription>
-                      เธเธธเธ“เนเธเนเนเธเธซเธฃเธทเธญเนเธกเนเธ—เธตเนเธเธฐเธฃเธตเน€เธเนเธ•เธ•เธณเนเธซเธเนเธเนเธ•เนเธฐเนเธเนเธเธ {selectedZone} เน€เธเนเธเธเนเธฒเน€เธฃเธดเนเธกเธ•เนเธ?
+                      คุณแน่ใจหรือไม่ที่จะรีเซ็ตตำแหน่งโต๊ะในโซน {selectedZone} เป็นค่าเริ่มต้น?
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>เธขเธเน€เธฅเธดเธ</AlertDialogCancel>
-                    <AlertDialogAction onClick={resetLayout}>เธฃเธตเน€เธเนเธ•</AlertDialogAction>
+                    <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+                    <AlertDialogAction onClick={resetLayout}>รีเซ็ต</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
@@ -281,17 +281,17 @@ return (
           )}
         </div>
 
-        {/* Dialog เธชเธณเธซเธฃเธฑเธเธเธฃเธฑเธเธเธเธฒเธ” Grid */}
+        {/* Dialog สำหรับปรับขนาด Grid */}
         <AlertDialog open={showGridSizeDialog} onOpenChange={setShowGridSizeDialog}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>เธเธฃเธฑเธเธเธเธฒเธ” Grid</AlertDialogTitle>
-              <AlertDialogDescription>เธเธณเธซเธเธ”เธเธณเธเธงเธเนเธ–เธงเนเธฅเธฐเธเธญเธฅเธฑเธกเธเนเธเธญเธ Grid</AlertDialogDescription>
+              <AlertDialogTitle>ปรับขนาด Grid</AlertDialogTitle>
+              <AlertDialogDescription>กำหนดจำนวนแถวและคอลัมน์ของ Grid</AlertDialogDescription>
             </AlertDialogHeader>
 
             <div className="grid grid-cols-2 gap-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="grid-rows">เธเธณเธเธงเธเนเธ–เธง</Label>
+                <Label htmlFor="grid-rows">จำนวนแถว</Label>
                 <Input
                   id="grid-rows"
                   type="number"
@@ -304,7 +304,7 @@ return (
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="grid-cols">เธเธณเธเธงเธเธเธญเธฅเธฑเธกเธเน</Label>
+                <Label htmlFor="grid-cols">จำนวนคอลัมน์</Label>
                 <Input
                   id="grid-cols"
                   type="number"
@@ -319,16 +319,16 @@ return (
             </div>
 
             <AlertDialogFooter>
-              <AlertDialogCancel>เธขเธเน€เธฅเธดเธ</AlertDialogCancel>
-              <AlertDialogAction onClick={handleResizeGrid}>เธเธฑเธเธ—เธถเธ</AlertDialogAction>
+              <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+              <AlertDialogAction onClick={handleResizeGrid}>บันทึก</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
 
         {/* Grid Layout */}
-        <div className={cn("relative border-2 rounded-lg p-4", getZoneColor(selectedZone))}>
+        <div className={cn("relative overflow-x-auto border-2 rounded-lg p-4", getZoneColor(selectedZone))}>
           <div
-            className="grid gap-1 mx-auto"
+            className="grid gap-1 mx-auto min-w-max"
             style={{
               gridTemplateColumns: `repeat(${gridSize.cols}, ${cellSize}px)`,
               gridTemplateRows: `repeat(${gridSize.rows}, ${cellSize}px)`,
@@ -356,7 +356,7 @@ return (
                   {table ? (
                     <div
                       className={cn(
-                        "w-full h-full rounded-full flex flex-col items-center justify-center text-xs font-medium border-2 transition-all",
+                        "relative w-full h-full rounded-full flex flex-col items-center justify-center text-xs leading-tight font-medium border-2 transition-all",
                         getTableColor(table),
                         isEditMode ? "cursor-move hover:scale-105" : "",
                         !table.isActive && "opacity-50",
@@ -366,27 +366,27 @@ return (
                       title={`${table.name} (${x}, ${y})`}
                     >
                       <span className="font-bold">{table.name}</span>
-                      <span className="text-xs opacity-75">9 เธ—เธตเนเธเธฑเนเธ</span>
+                      <span className="text-xs opacity-75">9 ที่นั่ง</span>
 
                       {isEditMode && (
-                        <div className="absolute -top-2 -right-2 flex gap-1">
+                        <div className="absolute top-0 right-0 z-20 flex gap-1">
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-6 w-6 p-0 bg-white"
+                            className="h-7 w-7 p-0 bg-white shadow-sm"
                             onClick={(e) => {
                               e.stopPropagation()
                               toggleTableActive(table.id)
                             }}
                           >
-                            {table.isActive ? "๐”ต" : "โซ"}
+                            {table.isActive ? "🔵" : "⚫"}
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-6 w-6 p-0 bg-red-50 hover:bg-red-100"
+                                className="h-7 w-7 p-0 bg-red-50 hover:bg-red-100 shadow-sm"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <Trash2 className="h-3 w-3" />
@@ -394,14 +394,14 @@ return (
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>เธฅเธเนเธ•เนเธฐ</AlertDialogTitle>
+                                <AlertDialogTitle>ลบโต๊ะ</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  เธเธธเธ“เนเธเนเนเธเธซเธฃเธทเธญเนเธกเนเธ—เธตเนเธเธฐเธฅเธ{table.name}? เธเธฒเธฃเธ”เธณเน€เธเธดเธเธเธฒเธฃเธเธตเนเนเธกเนเธชเธฒเธกเธฒเธฃเธ–เธขเนเธญเธเธเธฅเธฑเธเนเธ”เน
+                                  คุณแน่ใจหรือไม่ที่จะลบ{table.name}? การดำเนินการนี้ไม่สามารถย้อนกลับได้
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
-                                <AlertDialogCancel>เธขเธเน€เธฅเธดเธ</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleRemoveTable(table.id)}>เธฅเธ</AlertDialogAction>
+                                <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleRemoveTable(table.id)}>ลบ</AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
                           </AlertDialog>
@@ -421,38 +421,38 @@ return (
           </div>
         </div>
 
-        {/* เธชเธ–เธดเธ•เธดเนเธเธ */}
+        {/* สถิติโซน */}
         <div className="grid grid-cols-3 gap-4 mt-4">
           <Card>
             <CardContent className="p-4 text-center">
               <p className="text-2xl font-bold text-primary">{zoneTables.length}</p>
-              <p className="text-sm text-muted-foreground">เธเธณเธเธงเธเนเธ•เนเธฐเธ—เธฑเนเธเธซเธกเธ”</p>
+              <p className="text-sm text-muted-foreground">จำนวนโต๊ะทั้งหมด</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
               <p className="text-2xl font-bold text-green-600">{zoneTables.filter((t) => t.isActive).length}</p>
-              <p className="text-sm text-muted-foreground">เนเธ•เนเธฐเธ—เธตเนเน€เธเธดเธ”เนเธเนเธเธฒเธ</p>
+              <p className="text-sm text-muted-foreground">โต๊ะที่เปิดใช้งาน</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 text-center">
               <p className="text-2xl font-bold text-blue-600">{zoneTables.filter((t) => t.isActive).length * 9}</p>
-              <p className="text-sm text-muted-foreground">เธ—เธตเนเธเธฑเนเธเธ—เธฑเนเธเธซเธกเธ”</p>
+              <p className="text-sm text-muted-foreground">ที่นั่งทั้งหมด</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* เธเธณเนเธเธฐเธเธณ */}
+        {/* คำแนะนำ */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h4 className="font-medium text-blue-900 mb-2">เธเธณเนเธเธฐเธเธณเธเธฒเธฃเนเธเนเธเธฒเธ:</h4>
+          <h4 className="font-medium text-blue-900 mb-2">คำแนะนำการใช้งาน:</h4>
           <ul className="text-sm text-blue-800 space-y-1">
-            <li>โ€ข เน€เธเธดเธ” &quot;เนเธซเธกเธ”เนเธเนเนเธ&quot; เน€เธเธทเนเธญเธเธฑเธ”เธเธฒเธฃเธ•เธณเนเธซเธเนเธเนเธ•เนเธฐ</li>
-            <li>โ€ข เธเธฅเธดเธเนเธเธเนเธญเธเธงเนเธฒเธ (เธชเธตเน€เธ—เธฒ) เน€เธเธทเนเธญเน€เธเธดเนเธกเนเธ•เนเธฐเนเธซเธกเน</li>
-            <li>โ€ข เธฅเธฒเธเนเธ•เนเธฐเน€เธเธทเนเธญเธขเนเธฒเธขเธ•เธณเนเธซเธเนเธ</li>
-            <li>โ€ข เธเธฅเธดเธเธเธธเนเธกเธชเธตเธเนเธณเน€เธเธดเธ/เธ”เธณ เน€เธเธทเนเธญเน€เธเธดเธ”/เธเธดเธ”เธเธฒเธฃเนเธเนเธเธฒเธเนเธ•เนเธฐ</li>
-            <li>โ€ข เธเธฅเธดเธเธเธธเนเธกเธ–เธฑเธเธเธขเธฐเน€เธเธทเนเธญเธฅเธเนเธ•เนเธฐ</li>
-            <li>โ€ข เธเธฅเธดเธเธเธธเนเธก &quot;เธเธฃเธฑเธเธเธเธฒเธ” Grid&quot; เน€เธเธทเนเธญเธเธณเธซเธเธ”เธเธณเธเธงเธเนเธ–เธงเนเธฅเธฐเธเธญเธฅเธฑเธกเธเน</li>
+            <li>• เปิด &quot;โหมดแก้ไข&quot; เพื่อจัดการตำแหน่งโต๊ะ</li>
+            <li>• คลิกในช่องว่าง (สีเทา) เพื่อเพิ่มโต๊ะใหม่</li>
+            <li>• ลากโต๊ะเพื่อย้ายตำแหน่ง</li>
+            <li>• คลิกปุ่มสีน้ำเงิน/ดำ เพื่อเปิด/ปิดการใช้งานโต๊ะ</li>
+            <li>• คลิกปุ่มถังขยะเพื่อลบโต๊ะ</li>
+            <li>• คลิกปุ่ม &quot;ปรับขนาด Grid&quot; เพื่อกำหนดจำนวนแถวและคอลัมน์</li>
           </ul>
         </div>
       </CardContent>
