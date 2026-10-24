@@ -2,7 +2,8 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Image from "next/image";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useLoadingRouter } from "@/components/navigation-loading";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -16,6 +17,8 @@ const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
 type BookingSeat = {
   tableId: string;
   seatNumber: number;
+  studentName?: string;
+  classLevel?: string;
 };
 
 type Booking = {
@@ -40,7 +43,7 @@ function TicketLoading() {
 
 // Main ticket component that uses useSearchParams
 function TicketContent() {
-  const router = useRouter();
+  const router = useLoadingRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { clearBooking, tablePositions } = useBooking();
@@ -167,7 +170,10 @@ function TicketContent() {
                     key={index}
                     className="bg-primary text-primary-foreground p-2 rounded text-center font-medium text-sm"
                   >
-                    {table?.name || `โต๊ะ ${seat.tableId}`} ที่ {seat.seatNumber}
+                    <span className="block">{table?.name || `โต๊ะ ${seat.tableId}`} ที่ {seat.seatNumber}</span>
+                    {(seat.studentName || seat.classLevel) && (
+                      <span className="mt-1 block text-xs font-normal">{seat.studentName}{seat.classLevel ? ` · ${seat.classLevel}` : ""}</span>
+                    )}
                   </div>
                 );
               })}

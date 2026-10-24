@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useLoadingRouter } from "@/components/navigation-loading"
 import axios from "axios"
 import { ArrowLeft, CalendarDays, Loader2, Mail, Phone, Save, Ticket, User } from "lucide-react"
 
@@ -80,7 +80,7 @@ function getSeatLabel(seats: Seat[]) {
 }
 
 export default function ProfilePage() {
-  const router = useRouter()
+  const router = useLoadingRouter()
   const { user, updateProfile } = useAuth()
   const { toast } = useToast()
   const [activeScreen, setActiveScreen] = useState<Screen>("profile")

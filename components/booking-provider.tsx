@@ -24,6 +24,8 @@ interface Seat {
   tableId: number
   seatNumber: number
   isBooked: boolean
+  studentName: string
+  classLevel: string
 }
 
 interface BookingInfo {
@@ -36,7 +38,7 @@ export interface BookingRecord {
   id: string
   customerName: string
   phone: string
-  seats: Array<{ tableId: number; seatNumber: number; zone: string; tableName?: string }>
+  seats: Array<{ tableId: number; seatNumber: number; zone: string; tableName?: string; studentName?: string; classLevel?: string; checkIn?: { checkedIn: boolean; checkedInAt?: string; checkedInBy?: string } }>
   notes?: string
   totalPrice: number
   status: "pending" | "pending_payment" | "confirmed" | "cancelled" | "payment_timeout"
@@ -86,6 +88,7 @@ interface BookingContextType {
   addTable: (zone: string, x: number, y: number) => void
   removeTable: (tableId: number) => void
   toggleTableActive: (tableId: number) => void
+  markSeatsBooked: (seats: Array<{ tableId: number; seatNumber: number; zone: string }>) => void
   calculateTotalPrice: (selectedSeats: Seat[]) => number
   calculateDetailedPrice: (selectedSeats: Seat[]) => {
     details: Array<{
@@ -355,6 +358,17 @@ export function BookingProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const markSeatsBooked = useCallback((seats: Array<{ tableId: number; seatNumber: number; zone: string }>) => {
+    const bookedSeats = new Set(seats.map((seat) => `${seat.zone}-${seat.tableId}-${seat.seatNumber}`));
+    setTablePositions((previous) => previous.map((table) => ({
+      ...table,
+      seats: table.seats.map((seat) => bookedSeats.has(`${table.zone}-${table.id}-${seat.seatNumber}`)
+        ? { ...seat, isBooked: true }
+        : seat
+      ),
+    })));
+  }, []);
+
   const clearBooking = useCallback(() => {
     setSelectedSeats([]);
     setBookingInfo(null);
@@ -505,6 +519,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         addTable,
         removeTable,
         toggleTableActive,
+        markSeatsBooked,
         calculateTotalPrice,
         calculateDetailedPrice,
         isLoading,

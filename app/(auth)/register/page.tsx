@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useLoadingRouter } from "@/components/navigation-loading"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -52,7 +52,7 @@ type PendingGoogleProfile = {
 }
 
 export default function RegisterPage() {
-  const router = useRouter()
+  const router = useLoadingRouter()
   const { register, googleLogin } = useAuth()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)

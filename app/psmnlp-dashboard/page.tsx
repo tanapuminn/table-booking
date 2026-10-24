@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -23,25 +24,27 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  BarChart2, BookOpen, LayoutGrid, MapPin, Edit, Trash2, Eye,
+  BarChart2, BookOpen, LayoutGrid, MapPin, Edit, Trash2, Eye, ScanLine,
   Search, Settings, Home, Plus, Ticket,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useBooking, type BookingRecord } from "@/components/booking-provider";
 import { TableLayoutEditor } from "@/components/table-layout-editor";
 import { BookingStats } from "@/components/booking-stats";
-import { useRouter } from "next/navigation";
+import { DashboardCheckInMap } from "@/components/dashboard-checkin-map";
+import { useLoadingRouter } from "@/components/navigation-loading";
 import axios from "axios";
 import dayjs from "dayjs";
 import { cn } from "@/lib/utils";
 
 const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
 
-type Section = "stats" | "bookings" | "zones" | "layout" | "settings";
+type Section = "stats" | "bookings" | "checkin" | "zones" | "layout" | "settings";
 
 const NAV_ITEMS: { id: Section; label: string; icon: React.ElementType }[] = [
   { id: "stats", label: "\u0e2a\u0e16\u0e34\u0e15\u0e34\u0e01\u0e32\u0e23\u0e08\u0e2d\u0e07", icon: BarChart2 },
   { id: "bookings", label: "\u0e08\u0e31\u0e14\u0e01\u0e32\u0e23\u0e01\u0e32\u0e23\u0e08\u0e2d\u0e07", icon: BookOpen },
+  { id: "checkin", label: "\u0e1c\u0e31\u0e07\u0e40\u0e0a\u0e47\u0e01\u0e2d\u0e34\u0e19\u0e2b\u0e19\u0e49\u0e32\u0e07\u0e32\u0e19", icon: ScanLine },
   { id: "zones", label: "\u0e08\u0e31\u0e14\u0e01\u0e32\u0e23\u0e42\u0e0b\u0e19", icon: MapPin },
   { id: "layout", label: "\u0e1c\u0e31\u0e07\u0e17\u0e35\u0e48\u0e19\u0e31\u0e48\u0e07", icon: LayoutGrid },
   { id: "settings", label: "\u0e15\u0e31\u0e49\u0e07\u0e04\u0e48\u0e32\u0e40\u0e27\u0e47\u0e1a", icon: Settings },
@@ -49,12 +52,13 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ElementType }[] = [
 
 export default function DashboardPage() {
   const { toast } = useToast();
-  const router = useRouter();
+  const router = useLoadingRouter();
   const { user, isLoading: authLoading } = useAuth();
   const { bookingHistory, updateBookingRecord, zoneConfigs, updateZoneConfig, setBookingHistory } = useBooking();
 
   const [activeSection, setActiveSection] = useState<Section>("stats");
   const [searchTerm, setSearchTerm] = useState("");
+  const [bookingPage, setBookingPage] = useState(1);
   const [editingBooking, setEditingBooking] = useState<BookingRecord | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [isAddZoneOpen, setIsAddZoneOpen] = useState(false);
@@ -66,7 +70,16 @@ export default function DashboardPage() {
   const [siteSettings, setSiteSettings] = useState({
     projectTitle: "",
     projectSubtitle: "",
+    bankName: "",
+    bankAccountName: "",
+    bankAccountNumber: "",
+    bankAccountImage: "",
+    paymentType: "bank" as "bank" | "promptpay",
+    promptpayName: "",
+    promptpayNumber: "",
   });
+  const [bankImageFile, setBankImageFile] = useState<File | null>(null);
+  const [bankImagePreview, setBankImagePreview] = useState("");
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   useEffect(() => {
@@ -75,12 +88,19 @@ export default function DashboardPage() {
   const loadSiteSettings = () => {
     setIsLoadingSettings(true);
     axios
-      .get(`${baseURL}/api/settings?t=${Date.now()}`)
+      .get(`${baseURL}/api/settings?includeBankImage=true&t=${Date.now()}`)
       .then((res) => setSiteSettings({
         projectTitle: res.data?.projectTitle || "",
         projectSubtitle: res.data?.projectSubtitle || "",
+        bankName: res.data?.bankName || "",
+        bankAccountName: res.data?.bankAccountName || "",
+        bankAccountNumber: res.data?.bankAccountNumber || "",
+        bankAccountImage: res.data?.bankAccountImage || "",
+        paymentType: res.data?.paymentType === "promptpay" ? "promptpay" : "bank",
+        promptpayName: res.data?.promptpayName || "",
+        promptpayNumber: res.data?.promptpayNumber || "",
       }))
-      .catch(() => setSiteSettings({ projectTitle: "", projectSubtitle: "" }))
+      .catch(() => setSiteSettings({ projectTitle: "", projectSubtitle: "", bankName: "", bankAccountName: "", bankAccountNumber: "", bankAccountImage: "", paymentType: "bank", promptpayName: "", promptpayNumber: "" }))
       .finally(() => setIsLoadingSettings(false));
   };
 
@@ -96,6 +116,18 @@ export default function DashboardPage() {
     const matchesStatus = statusFilter === "all" || booking.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+  const bookingPageSize = 5;
+  const bookingPageCount = Math.max(1, Math.ceil(filteredBookings.length / bookingPageSize));
+  const bookingPageStart = (bookingPage - 1) * bookingPageSize;
+  const visibleBookings = filteredBookings.slice(bookingPageStart, bookingPageStart + bookingPageSize);
+
+  useEffect(() => {
+    setBookingPage(1);
+  }, [searchTerm, statusFilter]);
+
+  useEffect(() => {
+    if (bookingPage > bookingPageCount) setBookingPage(bookingPageCount);
+  }, [bookingPage, bookingPageCount]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -205,16 +237,41 @@ export default function DashboardPage() {
 
     setIsSavingSettings(true);
     try {
-      const res = await axios.put(`${baseURL}/api/settings`, { projectTitle, projectSubtitle });
+      const formData = new FormData();
+      formData.append("projectTitle", projectTitle);
+      formData.append("projectSubtitle", projectSubtitle);
+      formData.append("bankName", siteSettings.bankName.trim());
+      formData.append("bankAccountName", siteSettings.bankAccountName.trim());
+      formData.append("bankAccountNumber", siteSettings.bankAccountNumber.trim());
+      formData.append("paymentType", siteSettings.paymentType);
+      formData.append("promptpayName", siteSettings.promptpayName.trim());
+      formData.append("promptpayNumber", siteSettings.promptpayNumber.replace(/\D/g, ""));
+      if (siteSettings.paymentType === "bank" && bankImageFile) formData.append("bankAccountImage", bankImageFile);
+
+      const res = await axios.put(`${baseURL}/api/settings`, formData);
       setSiteSettings(res.data);
+      setBankImageFile(null);
+      setBankImagePreview(res.data.bankAccountImage || "");
       window.dispatchEvent(new Event("site-settings-updated"));
-      toast({ title: "บันทึกชื่อโครงการสำเร็จ", description: "รีเฟรชหน้าเว็บเพื่อดูชื่อใหม่ในทุกหน้าจอ" });
+      toast({ title: "บันทึกการตั้งค่าเว็บสำเร็จ" });
     } catch (error: any) {
       const message = error?.response?.data?.message || "ไม่สามารถบันทึกชื่อโครงการได้";
       toast({ title: "บันทึกไม่สำเร็จ", description: message, variant: "destructive" });
     } finally {
       setIsSavingSettings(false);
     }
+  };
+
+  const handleBankImageChange = (file?: File) => {
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 2 * 1024 * 1024) {
+      toast({ title: "เลือกรูปไม่สำเร็จ", description: "รองรับ JPG, PNG หรือ WEBP ขนาดไม่เกิน 2 MB", variant: "destructive" });
+      return;
+    }
+    setBankImageFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setBankImagePreview(String(reader.result || ""));
+    reader.readAsDataURL(file);
   };
   const getZoneStats = () => {
     const stats: Record<string, number> = zoneConfigs.reduce((acc, z) => ({ ...acc, [z.id]: 0 }), {});
@@ -228,7 +285,7 @@ export default function DashboardPage() {
   const SettingsSection = () => (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">{"\u0e15\u0e31\u0e49\u0e07\u0e04\u0e48\u0e32\u0e0a\u0e37\u0e48\u0e2d\u0e42\u0e04\u0e23\u0e07\u0e01\u0e32\u0e23"}</CardTitle>
+        <CardTitle className="text-base">ตั้งค่าเว็บไซต์</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {isLoadingSettings ? (
@@ -238,36 +295,84 @@ export default function DashboardPage() {
             <div className="h-20 animate-pulse rounded bg-muted" />
           </div>
         ) : (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor="project-title">{"\u0e0a\u0e37\u0e48\u0e2d\u0e23\u0e30\u0e1a\u0e1a / \u0e1a\u0e23\u0e23\u0e17\u0e31\u0e14\u0e41\u0e23\u0e01"}</Label>
-              <Input
-                id="project-title"
-                value={siteSettings.projectTitle}
-                onChange={(e) => setSiteSettings((prev) => ({ ...prev, projectTitle: e.target.value }))}
-                placeholder=""
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="project-subtitle">{"\u0e0a\u0e37\u0e48\u0e2d\u0e42\u0e04\u0e23\u0e07\u0e01\u0e32\u0e23 / \u0e1a\u0e23\u0e23\u0e17\u0e31\u0e14\u0e17\u0e35\u0e48\u0e2a\u0e2d\u0e07"}</Label>
-              <Input
-                id="project-subtitle"
-                value={siteSettings.projectSubtitle}
-                onChange={(e) => setSiteSettings((prev) => ({ ...prev, projectSubtitle: e.target.value }))}
-                placeholder=""
-              />
-            </div>
-            <div className="mb-2 text-sm text-red-500">
-              {"\u0e15\u0e31\u0e27\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e0a\u0e37\u0e48\u0e2d\u0e42\u0e04\u0e23\u0e07\u0e01\u0e32\u0e23\u0e17\u0e35\u0e48\u0e08\u0e30\u0e41\u0e2a\u0e14\u0e07\u0e43\u0e19\u0e17\u0e38\u0e01\u0e2b\u0e19\u0e49\u0e32\u0e08\u0e2d"}
-            </div>
-            <div className="rounded-md border bg-muted/30 p-4 text-center">
-              {siteSettings.projectTitle && <p className="text-2xl font-bold leading-tight">{siteSettings.projectTitle}</p>}
-              {siteSettings.projectSubtitle && <p className="text-2xl font-bold leading-tight">{siteSettings.projectSubtitle}</p>}
-            </div>
+          <div className="space-y-4">
+            <Tabs defaultValue="project" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 sm:w-fit">
+                <TabsTrigger value="project">ข้อมูลโครงการ</TabsTrigger>
+                <TabsTrigger value="bank">บัญชีธนาคาร</TabsTrigger>
+              </TabsList>
+              <TabsContent value="project" className="space-y-4 pt-2">
+                <div className="space-y-2">
+                  <Label htmlFor="project-title">{"\u0e0a\u0e37\u0e48\u0e2d\u0e23\u0e30\u0e1a\u0e1a / \u0e1a\u0e23\u0e23\u0e17\u0e31\u0e14\u0e41\u0e23\u0e01"}</Label>
+                  <Input id="project-title" value={siteSettings.projectTitle} onChange={(e) => setSiteSettings((prev) => ({ ...prev, projectTitle: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="project-subtitle">{"\u0e0a\u0e37\u0e48\u0e2d\u0e42\u0e04\u0e23\u0e07\u0e01\u0e32\u0e23 / \u0e1a\u0e23\u0e23\u0e17\u0e31\u0e14\u0e17\u0e35\u0e48\u0e2a\u0e2d\u0e07"}</Label>
+                  <Input id="project-subtitle" value={siteSettings.projectSubtitle} onChange={(e) => setSiteSettings((prev) => ({ ...prev, projectSubtitle: e.target.value }))} />
+                </div>
+                <p className="text-sm text-red-500">{"\u0e15\u0e31\u0e27\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e0a\u0e37\u0e48\u0e2d\u0e42\u0e04\u0e23\u0e07\u0e01\u0e32\u0e23\u0e17\u0e35\u0e48\u0e08\u0e30\u0e41\u0e2a\u0e14\u0e07\u0e43\u0e19\u0e17\u0e38\u0e01\u0e2b\u0e19\u0e49\u0e32\u0e08\u0e2d"}</p>
+                <div className="rounded-md border bg-muted/30 p-4 text-center">
+                  {siteSettings.projectTitle && <p className="text-2xl font-bold leading-tight">{siteSettings.projectTitle}</p>}
+                  {siteSettings.projectSubtitle && <p className="text-2xl font-bold leading-tight">{siteSettings.projectSubtitle}</p>}
+                </div>
+              </TabsContent>
+              <TabsContent value="bank" className="space-y-4 pt-2">
+                <div className="space-y-2">
+                  <Label htmlFor="payment-type">ช่องทางรับชำระเงิน</Label>
+                  <Select value={siteSettings.paymentType} onValueChange={(value) => setSiteSettings((prev) => ({ ...prev, paymentType: value as "bank" | "promptpay" }))}>
+                    <SelectTrigger id="payment-type"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bank">บัญชีธนาคาร</SelectItem>
+                      <SelectItem value="promptpay">PromptPay</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {siteSettings.paymentType === "bank" ? (
+                  <>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="bank-name">ธนาคาร</Label>
+                        <Input id="bank-name" value={siteSettings.bankName} onChange={(e) => setSiteSettings((prev) => ({ ...prev, bankName: e.target.value }))} placeholder="เช่น ธนาคารไทยพาณิชย์" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="bank-account-name">ชื่อบัญชี</Label>
+                        <Input id="bank-account-name" value={siteSettings.bankAccountName} onChange={(e) => setSiteSettings((prev) => ({ ...prev, bankAccountName: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="bank-account-number">เลขบัญชี</Label>
+                      <Input id="bank-account-number" value={siteSettings.bankAccountNumber} onChange={(e) => setSiteSettings((prev) => ({ ...prev, bankAccountNumber: e.target.value }))} inputMode="numeric" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="bank-account-image">รูปบัญชีธนาคาร (JPG, PNG หรือ WEBP ไม่เกิน 2 MB)</Label>
+                      <Input id="bank-account-image" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => handleBankImageChange(e.target.files?.[0])} />
+                    </div>
+                    {(bankImagePreview || siteSettings.bankAccountImage) && (
+                      <div className="rounded-md border bg-muted/30 p-4">
+                        <p className="mb-2 text-sm text-muted-foreground">ตัวอย่างรูปบัญชีที่แสดงหน้าชำระเงิน</p>
+                        <Image src={bankImagePreview || siteSettings.bankAccountImage} alt="ตัวอย่างรูปบัญชีธนาคาร" width={220} height={220} unoptimized className="mx-auto max-h-56 w-auto object-contain" />
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="promptpay-name">ชื่อบัญชี PromptPay</Label>
+                      <Input id="promptpay-name" value={siteSettings.promptpayName} onChange={(e) => setSiteSettings((prev) => ({ ...prev, promptpayName: e.target.value }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="promptpay-number">เลขพร้อมเพย์ (เบอร์มือถือ 10 หลัก หรือเลขบัตร/ผู้เสียภาษี 13 หลัก)</Label>
+                      <Input id="promptpay-number" value={siteSettings.promptpayNumber} onChange={(e) => setSiteSettings((prev) => ({ ...prev, promptpayNumber: e.target.value.replace(/\D/g, "") }))} inputMode="numeric" maxLength={13} />
+                    </div>
+                    <p className="text-sm text-muted-foreground">ระบบจะสร้าง QR ตามยอดจองโดยอัตโนมัติ</p>
+                  </>
+                )}
+              </TabsContent>
+            </Tabs>
             <Button onClick={handleSaveSettings} disabled={isSavingSettings}>
-              {isSavingSettings ? "\u0e01\u0e33\u0e25\u0e31\u0e07\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01..." : "\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e0a\u0e37\u0e48\u0e2d\u0e42\u0e04\u0e23\u0e07\u0e01\u0e32\u0e23"}
+              {isSavingSettings ? "กำลังบันทึก..." : "บันทึกการตั้งค่าเว็บ"}
             </Button>
-          </>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -328,7 +433,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-3">
-        {filteredBookings.map((booking) => (
+        {visibleBookings.map((booking) => (
           <Card key={booking.id}>
             <CardHeader className="pb-2">
               <div className="flex justify-between items-start gap-2">
@@ -412,7 +517,7 @@ export default function DashboardPage() {
                   <div className="flex flex-wrap gap-1">
                     {booking.seats.map((seat, i) => (
                       <Badge key={i} variant="secondary" className="text-xs">
-                        {seat.tableName} ที่ {seat.seatNumber}
+                        {seat.tableName} ที่ {seat.seatNumber}{seat.studentName ? ` · ${seat.studentName}` : ""}{seat.classLevel ? ` (${seat.classLevel})` : ""}
                       </Badge>
                     ))}
                   </div>
@@ -432,6 +537,22 @@ export default function DashboardPage() {
           <div className="text-center py-16 text-muted-foreground">ไม่พบข้อมูลการจองที่ตรงกับการค้นหา</div>
         )}
       </div>
+      {filteredBookings.length > bookingPageSize && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+          <p className="text-sm text-muted-foreground">
+            แสดง {bookingPageStart + 1}–{Math.min(bookingPageStart + bookingPageSize, filteredBookings.length)} จาก {filteredBookings.length} รายการ
+          </p>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled={bookingPage === 1} onClick={() => setBookingPage((page) => Math.max(1, page - 1))}>
+              ก่อนหน้า
+            </Button>
+            <span className="min-w-20 text-center text-sm text-muted-foreground">หน้า {bookingPage} / {bookingPageCount}</span>
+            <Button variant="outline" size="sm" disabled={bookingPage === bookingPageCount} onClick={() => setBookingPage((page) => Math.min(bookingPageCount, page + 1))}>
+              ถัดไป
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -591,15 +712,6 @@ export default function DashboardPage() {
           {NAV_ITEMS.map((item) => <SidebarItem key={item.id} item={item} />)}
         </nav>
 
-        <div className="p-2 border-t">
-          <button
-            onClick={() => router.push("/")}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <Home className="h-4 w-4 shrink-0" />
-            กลับหน้าหลัก
-          </button>
-        </div>
       </aside>
 
       {/* ── Main Area ─────────────────────────────────────────────────── */}
@@ -622,21 +734,14 @@ export default function DashboardPage() {
               {item.label}
             </button>
           ))}
-          <button
-            onClick={() => router.push("/")}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap text-muted-foreground hover:bg-muted ml-auto shrink-0"
-          >
-            <Home className="h-3.5 w-3.5" />
-            หน้าหลัก
-          </button>
         </div>
 
         {/* Content */}
         <div className="flex-1 p-5 md:p-6 space-y-6">
 
           {/* Page header */}
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
               <h2 className="text-xl font-bold">
                 {NAV_ITEMS.find((i) => i.id === activeSection)?.label}
               </h2>
@@ -646,11 +751,16 @@ export default function DashboardPage() {
                 </p>
               )}
             </div>
+            <Button variant="outline" size="sm" className="shrink-0 gap-2" onClick={() => router.push("/")}>
+              <Home className="h-4 w-4" />
+              กลับหน้าหลัก
+            </Button>
           </div>
 
           {/* Section content */}
           {activeSection === "stats" && <BookingStats />}
           {activeSection === "bookings" && <BookingsSection />}
+          {activeSection === "checkin" && <DashboardCheckInMap eventName={siteSettings.projectSubtitle || siteSettings.projectTitle || "โครงการปัจจุบัน"} />}
           {activeSection === "zones" && <ZonesSection />}
           {activeSection === "layout" && <TableLayoutEditor />}
           {activeSection === "settings" && SettingsSection()}

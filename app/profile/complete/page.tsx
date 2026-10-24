@@ -1,7 +1,8 @@
 "use client"
 
 import { Suspense, useEffect, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
+import { useLoadingRouter } from "@/components/navigation-loading"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -34,7 +35,7 @@ const formSchema = z.object({
 })
 
 function CompleteProfileForm() {
-  const router = useRouter()
+  const router = useLoadingRouter()
   const searchParams = useSearchParams()
   const { user, isLoading, updateProfile } = useAuth()
   const { toast } = useToast()

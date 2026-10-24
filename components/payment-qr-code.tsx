@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, use } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -15,13 +15,61 @@ interface PaymentQRCodeProps {
   bankName?: string
 }
 
+type PaymentSettings = {
+  paymentType: "bank" | "promptpay"
+  bankName: string
+  bankAccountName: string
+  bankAccountNumber: string
+  bankAccountImage: string
+  promptpayName: string
+  promptpayNumber: string
+}
+
 export function PaymentQRCode({ amount, recipientName = "พัชรี เวชยันต์วิวัฒน์", bankName = "ธนาคารไทยพาณิชย์" }: PaymentQRCodeProps) {
   const { toast } = useToast()
   const [copied, setCopied] = useState(false)
   const [qrSize, setQrSize] = useState(220)
-  const [qrCode, setQrCode] = useState("");
-  let promptpay = '0805912700';
-  let bankAccountNumber = '404-487734-0';
+  const [bankSettings, setBankSettings] = useState<PaymentSettings>({
+    paymentType: "bank",
+    bankName,
+    bankAccountName: recipientName,
+    bankAccountNumber: "",
+    bankAccountImage: "",
+    promptpayName: "",
+    promptpayNumber: "",
+  })
+  const [promptpayQr, setPromptpayQr] = useState("")
+  const [promptpayQrError, setPromptpayQrError] = useState(false)
+
+  useEffect(() => {
+    axios.get(`${process.env.NEXT_PUBLIC_BASE_URL}/api/settings?includeBankImage=true`)
+      .then((res) => setBankSettings({
+        paymentType: res.data?.paymentType === "promptpay" ? "promptpay" : "bank",
+        bankName: res.data?.bankName || bankName,
+        bankAccountName: res.data?.bankAccountName || recipientName,
+        bankAccountNumber: res.data?.bankAccountNumber || "",
+        bankAccountImage: res.data?.bankAccountImage || "",
+        promptpayName: res.data?.promptpayName || "",
+        promptpayNumber: res.data?.promptpayNumber || "",
+      }))
+      .catch((error) => console.error("Error loading bank account settings:", error))
+  }, [bankName, recipientName])
+
+  useEffect(() => {
+    if (bankSettings.paymentType !== "promptpay" || !bankSettings.promptpayNumber || amount <= 0) {
+      setPromptpayQr("")
+      setPromptpayQrError(false)
+      return
+    }
+
+    let cancelled = false
+    setPromptpayQr("")
+    setPromptpayQrError(false)
+    axios.get(`${process.env.NEXT_PUBLIC_BASE_URL}/api/settings/promptpay-qr`, { params: { amount } })
+      .then((res) => { if (!cancelled) setPromptpayQr(res.data?.qrCode || "") })
+      .catch(() => { if (!cancelled) setPromptpayQrError(true) })
+    return () => { cancelled = true }
+  }, [bankSettings.paymentType, bankSettings.promptpayNumber, amount])
 
   // ปรับขนาด QR Code ตามขนาดหน้าจอ
   useEffect(() => {
@@ -39,21 +87,11 @@ export function PaymentQRCode({ amount, recipientName = "พัชรี เว�
   }, [])
 
   const handleCopyAccountNumber = () => {
-    navigator.clipboard.writeText(bankAccountNumber).then(() => {
+    if (!bankSettings.bankAccountNumber) return
+    navigator.clipboard.writeText(bankSettings.bankAccountNumber).then(() => {
       setCopied(true)
       toast({
-        title: "คัดลอกเลขบัญชีแล้ว",
-        description: "คุณสามารถวางในแอปธนาคารได้ทันที",
-      })
-      setTimeout(() => setCopied(false), 2000)
-    })
-  }
-
-  const handleCopyPromptPay = () => {
-    navigator.clipboard.writeText(promptpay).then(() => {
-      setCopied(true)
-      toast({
-        title: "คัดลอกเบอร์ PromptPay แล้ว",
+        title: bankSettings.paymentType === "promptpay" ? "คัดลอกเลขพร้อมเพย์แล้ว" : "คัดลอกเลขบัญชีแล้ว",
         description: "คุณสามารถวางในแอปธนาคารได้ทันที",
       })
       setTimeout(() => setCopied(false), 2000)
@@ -71,7 +109,9 @@ export function PaymentQRCode({ amount, recipientName = "พัชรี เว�
       <CardContent className="flex flex-col items-center pt-6 space-y-4">
         <div className="text-center mb-2">
           {/* <p className="text-sm text-muted-foreground">PromptPay / พร้อมเพย์</p> */}
-          <p className="text-xl text-muted-foreground">ธนาคารไทยพาณิชย์</p>
+          <p className="text-xl text-muted-foreground">
+            {bankSettings.paymentType === "promptpay" ? "PromptPay" : bankSettings.bankName}
+          </p>
           <p className="text-lg font-bold">฿{amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</p>
         </div>
 
@@ -84,18 +124,36 @@ export function PaymentQRCode({ amount, recipientName = "พัชรี เว�
             height={qrSize}
           />
         </div> */}
-        <div className="bg-white p-3 rounded-lg shadow-sm border">
-          <Image src="https://i.pinimg.com/736x/02/31/87/023187a2f2dc47bbdc809b43c7667b3a.jpg" alt="เลขที่บัญชีธนาคาร" className="mx-auto" width={qrSize} height={qrSize} unoptimized />
+        <div className="flex min-h-40 items-center justify-center rounded-lg border bg-white p-3 shadow-sm">
+          {bankSettings.paymentType === "promptpay" ? promptpayQr ? (
+            <Image src={promptpayQr} alt={`PromptPay QR สำหรับยอด ${amount.toLocaleString("th-TH")} บาท`} className="mx-auto object-contain" width={qrSize} height={qrSize} unoptimized />
+          ) : promptpayQrError ? (
+            <p className="text-sm text-destructive">สร้าง QR ไม่สำเร็จ กรุณาตรวจเลขพร้อมเพย์ในตั้งค่าเว็บ</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">กำลังสร้าง QR พร้อมเพย์...</p>
+          ) : bankSettings.bankAccountImage ? (
+            <Image src={bankSettings.bankAccountImage} alt="รูปบัญชีธนาคาร" className="mx-auto object-contain" width={qrSize} height={qrSize} unoptimized />
+          ) : (
+            <p className="text-sm text-muted-foreground">ยังไม่ได้ตั้งค่ารูปบัญชีธนาคาร</p>
+          )}
         </div>
 
 
         <div className="text-center space-y-1">
-          <p className="font-medium">{recipientName}</p>
+          <p className="font-medium">
+            {bankSettings.paymentType === "promptpay" ? bankSettings.promptpayName : bankSettings.bankAccountName}
+          </p>
           <div className="flex items-center justify-center gap-2">
-            <p className="text-muted-foreground">{bankAccountNumber}</p>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopyAccountNumber}>
-              {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-            </Button>
+            <p className="text-muted-foreground">
+              {bankSettings.paymentType === "promptpay"
+                ? bankSettings.promptpayNumber || "ยังไม่ได้ตั้งค่าเลขพร้อมเพย์"
+                : bankSettings.bankAccountNumber || "ยังไม่ได้ตั้งค่าเลขบัญชี"}
+            </p>
+            {(bankSettings.paymentType === "promptpay" ? bankSettings.promptpayNumber : bankSettings.bankAccountNumber) && (
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopyAccountNumber} aria-label="คัดลอกเลขบัญชี">
+                {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              </Button>
+            )}
           </div>
         </div>
 

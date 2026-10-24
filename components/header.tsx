@@ -1,11 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
+import { useLoadingRouter } from "@/components/navigation-loading"
 import axios from "axios"
 import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
 import { LayoutDashboard, LogOut, User } from "lucide-react"
+import Image from "next/image"
 
 const AUTH_PATHS = ["/login", "/register"]
 const baseURL = process.env.NEXT_PUBLIC_BASE_URL
@@ -17,7 +19,7 @@ type SiteSettings = {
 
 export function Header() {
   const pathname = usePathname()
-  const router = useRouter()
+  const router = useLoadingRouter()
   const { user, logout } = useAuth()
   const [settings, setSettings] = useState<SiteSettings | null>(null)
 
@@ -49,34 +51,31 @@ export function Header() {
   }
 
   return (
-    <header className="border-b">
-      <div className="container mx-auto px-4 py-4">
+    <header className="border-b border-pink-100 bg-white">
+      <div className="mx-auto w-full max-w-[1480px] px-4 py-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between gap-4">
-          <div className="flex-1" />
-          <div className="min-w-0 flex-1 text-center">
-            {settings ? (
-              <>
-                {settings.projectTitle && <h1 className="text-2xl font-bold leading-tight">{settings.projectTitle}</h1>}
-                {settings.projectSubtitle && <h2 className="text-2xl font-bold leading-tight">{settings.projectSubtitle}</h2>}
-              </>
-            ) : (
-              <div className="space-y-2 py-1">
-                <div className="mx-auto h-6 w-48 animate-pulse rounded bg-muted" />
-                <div className="mx-auto h-6 w-72 animate-pulse rounded bg-muted" />
-              </div>
-            )}
+          <div className="flex min-w-0 items-center gap-3">
+            <Image src="/images/psm.png" alt="ตราโรงเรียนประสานมิตร" width={52} height={52} className="h-11 w-11 object-contain sm:h-12 sm:w-12" />
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold text-primary sm:text-sm">โรงเรียนประสานมิตร</p>
+              <p className="truncate text-lg font-bold tracking-tight text-slate-900 sm:text-2xl">{settings?.projectSubtitle || settings?.projectTitle || "ระบบจองโต๊ะ"}</p>
+              {settings?.projectSubtitle && settings?.projectTitle && (
+                <p className="truncate text-xs text-slate-500">{settings.projectTitle}</p>
+              )}
+            </div>
           </div>
-          <div className="flex flex-1 items-center justify-end gap-2">
+          <div className="flex items-center justify-end gap-1 sm:gap-2">
             {user && (
               <>
                 <button
                   onClick={() => router.push("/profile")}
+                  aria-label="โปรไฟล์ของฉัน"
                   className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <User className="h-4 w-4" />
-                  <span className="max-w-32 truncate">{user.fullname}</span>
+                  <span className="hidden max-w-32 truncate sm:inline">{user.fullname}</span>
                   {user.role === "admin" && (
-                    <span className="ml-1 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700">
+                    <span className="ml-1 hidden rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700 md:inline">
                       Admin
                     </span>
                   )}
@@ -86,15 +85,16 @@ export function Header() {
                     variant="ghost"
                     size="sm"
                     onClick={() => router.push("/psmnlp-dashboard")}
+                    aria-label="แดชบอร์ดผู้ดูแล"
                     className="gap-1"
                   >
                     <LayoutDashboard className="h-4 w-4" />
-                    Dashboard
+                    <span className="hidden md:inline">Dashboard</span>
                   </Button>
                 )}
-                <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-1">
+                <Button variant="ghost" size="sm" onClick={handleLogout} aria-label="ออกจากระบบ" className="gap-1">
                   <LogOut className="h-4 w-4" />
-                  {"\u0e2d\u0e2d\u0e01\u0e08\u0e32\u0e01\u0e23\u0e30\u0e1a\u0e1a"}
+                  <span className="hidden md:inline">ออกจากระบบ</span>
                 </Button>
               </>
             )}

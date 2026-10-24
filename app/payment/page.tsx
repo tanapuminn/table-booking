@@ -3,15 +3,16 @@
 import type React from "react";
 import Image from "next/image"
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useLoadingRouter } from "@/components/navigation-loading";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, CreditCard, QrCode, FileText, Loader2, Clock, X } from "lucide-react";
+import { Upload, CreditCard, QrCode, FileText, Loader2, Clock, X, CheckCircle2 } from "lucide-react";
 import { useBooking } from "@/components/booking-provider";
+import { useAuth } from "@/components/auth-provider";
 import { useToast } from "@/hooks/use-toast";
 import { PriceSummary } from "@/components/price-summary";
 import { PaymentQRCode } from "@/components/payment-qr-code";
@@ -20,9 +21,10 @@ import axios from "axios";
 const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
 
 export default function PaymentPage() {
-  const router = useRouter();
+  const router = useLoadingRouter();
   const { toast } = useToast();
-  const { selectedSeats, bookingInfo, setPaymentProof, calculateTotalPrice, tablePositions, zoneConfigs, addBookingRecord, clearBooking } = useBooking();
+  const { user } = useAuth();
+  const { selectedSeats, bookingInfo, setPaymentProof, calculateTotalPrice, tablePositions, zoneConfigs, addBookingRecord, clearBooking, markSeatsBooked } = useBooking();
   const [paymentImage, setPaymentImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -223,11 +225,14 @@ export default function PaymentPage() {
         });
       } catch (error: any) {
         console.error("Error cancelling booking:", error);
+        setIsSubmitting(false);
+        setIsTimerActive(true);
         toast({
           title: "ข้อผิดพลาด",
           description: "ไม่สามารถยกเลิกการจองได้ กรุณาลองใหม่",
           variant: "destructive",
         });
+        return;
       }
     }
 
@@ -289,6 +294,7 @@ export default function PaymentPage() {
         });
 
         // อัปเดต state ด้วยข้อมูลการจอง
+        markSeatsBooked(response.data.seats);
         addBookingRecord({
           id: response.data.id,
           customerName: response.data.customerName,
@@ -370,6 +376,48 @@ export default function PaymentPage() {
           variant: "destructive",
         });
       }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAdminConfirmBooking = async () => {
+    const currentBookingId = pendingBookingId || sessionStorage.getItem('pendingBookingId');
+    if (!currentBookingId) return;
+
+    setIsSubmitting(true);
+    setIsTimerActive(false);
+    try {
+      const response = await axios.patch(`${baseURL}/api/bookings/${currentBookingId}`, {
+        status: "confirmed",
+      });
+      const booking = response.data;
+      markSeatsBooked(booking.seats);
+      addBookingRecord({
+        id: booking.id,
+        customerName: booking.customerName,
+        phone: booking.phone,
+        seats: booking.seats,
+        notes: booking.notes,
+        totalPrice: booking.totalPrice,
+        status: "confirmed",
+        bookingDate: booking.bookingDate,
+        paymentProof: booking.paymentProof || null,
+      });
+      sessionStorage.removeItem('pendingBookingId');
+      clearBooking();
+      const emailStatus = booking.ticketEmailStatus;
+      const emailDescription = emailStatus?.sent
+        ? "ส่งอีเมลตั๋วแล้ว · ไม่ได้ตรวจสอบสลิป"
+        : emailStatus?.skipped
+          ? `ยืนยันแล้ว แต่ไม่ได้ส่งอีเมล (${emailStatus.reason}) · ไม่ได้ตรวจสอบสลิป`
+          : "ยืนยันแล้ว แต่ส่งอีเมลไม่สำเร็จ · ไม่ได้ตรวจสอบสลิป";
+      toast({ title: "ยืนยันการจองสำหรับทดสอบแล้ว", description: emailDescription });
+      router.push(`/ticket?bookingId=${booking.id}`);
+    } catch (error) {
+      console.error("Error confirming booking as admin:", error);
+      setIsTimerActive(true);
+      toast({ title: "ยืนยันการจองไม่สำเร็จ", description: "กรุณาลองใหม่อีกครั้ง", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -462,9 +510,11 @@ export default function PaymentPage() {
                 const tablePosition = tablePositions.find((t) => t.id === seat.tableId);
                 const seatKey = seat.id || `${seat.tableId}-${seat.seatNumber}-${index}`;
                 return (
-                  <div key={seatKey} className="flex justify-between items-center p-2 bg-muted rounded">
-                    <span>
-                      {tablePosition?.name || `โต๊ะ ${seat.tableId}`} ที่นั่ง {seat.seatNumber}
+                  <div key={seatKey} className="flex items-center justify-between gap-4 rounded bg-muted p-2">
+                    <span>{tablePosition?.name || seat.tableName || `โต๊ะ ${seat.tableId}`} ที่นั่ง {seat.seatNumber}</span>
+                    <span className="text-right">
+                      <span className="block font-medium">{seat.studentName || "ยังไม่ระบุชื่อ"}</span>
+                      {seat.classLevel && <span className="block text-sm text-muted-foreground">{seat.classLevel}</span>}
                     </span>
                   </div>
                 );
@@ -578,6 +628,19 @@ export default function PaymentPage() {
           )}
         </Button>
       </div>
+
+      {user?.role === "admin" && bookingData?.status === "pending_payment" && (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full border-primary text-primary hover:bg-pink-50"
+          onClick={handleAdminConfirmBooking}
+          disabled={isLoading || isSubmitting}
+        >
+          <CheckCircle2 className="mr-2 h-4 w-4" />
+          ยืนยันการจองสำหรับทดสอบ (ไม่ตรวจสลิป)
+        </Button>
+      )}
     </div>
   );
 }

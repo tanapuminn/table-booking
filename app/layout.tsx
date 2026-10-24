@@ -1,14 +1,12 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
 import "./globals.css"
 import { AuthProvider } from "@/components/auth-provider"
 import { BookingProvider } from "@/components/booking-provider"
 import { Header } from "@/components/header"
 import { Toaster } from "@/components/ui/toaster"
 import { ErrorBoundary } from "../components/error-boundary"
-
-const inter = Inter({ subsets: ["latin"] })
+import { NavigationLoadingProvider } from "@/components/navigation-loading"
 
 export const metadata: Metadata = {
   title: "Prasanmit Chinese Restaurant Booking System",
@@ -28,18 +26,20 @@ export default function RootLayout({
 }) {
   return (
     <html lang="th">
-      <body className={inter.className}>
-        <ErrorBoundary>
-          <AuthProvider>
-            <BookingProvider>
-              <div className="min-h-screen bg-background">
-                <Header />
-                <main className="container mx-auto px-4 py-8">{children}</main>
-              </div>
-              <Toaster />
-            </BookingProvider>
-          </AuthProvider>
-        </ErrorBoundary>
+      <body>
+        <NavigationLoadingProvider>
+          <ErrorBoundary>
+            <AuthProvider>
+              <BookingProvider>
+                <div className="min-h-screen bg-background">
+                  <Header />
+                  <main className="mx-auto w-full max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+                </div>
+                <Toaster />
+              </BookingProvider>
+            </AuthProvider>
+          </ErrorBoundary>
+        </NavigationLoadingProvider>
       </body>
     </html>
   )
