@@ -1,16 +1,18 @@
 "use client";
 
 import type React from "react";
+import Image from "next/image"
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useLoadingRouter } from "@/components/navigation-loading";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, CreditCard, QrCode, FileText, Loader2, Clock, X } from "lucide-react";
+import { Upload, CreditCard, QrCode, FileText, Loader2, Clock, X, CheckCircle2 } from "lucide-react";
 import { useBooking } from "@/components/booking-provider";
+import { useAuth } from "@/components/auth-provider";
 import { useToast } from "@/hooks/use-toast";
 import { PriceSummary } from "@/components/price-summary";
 import { PaymentQRCode } from "@/components/payment-qr-code";
@@ -19,9 +21,10 @@ import axios from "axios";
 const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
 
 export default function PaymentPage() {
-  const router = useRouter();
+  const router = useLoadingRouter();
   const { toast } = useToast();
-  const { selectedSeats, bookingInfo, setPaymentProof, calculateTotalPrice, tablePositions, zoneConfigs, addBookingRecord, clearBooking } = useBooking();
+  const { user } = useAuth();
+  const { selectedSeats, bookingInfo, setPaymentProof, calculateTotalPrice, tablePositions, zoneConfigs, addBookingRecord, clearBooking, markSeatsBooked } = useBooking();
   const [paymentImage, setPaymentImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,7 +67,9 @@ export default function PaymentPage() {
 
       try {
         // ดึงข้อมูลการจองจาก API
-        const response = await fetch(`${baseURL}/api/bookings/${bookingId}`);
+        const response = await fetch(`${baseURL}/api/bookings/${bookingId}`, {
+          credentials: 'include',
+        });
         if (!response.ok) {
           throw new Error('ไม่พบข้อมูลการจอง');
         }
@@ -99,6 +104,8 @@ export default function PaymentPage() {
     };
 
     loadPendingBooking();
+    // Initial booking context is intentionally loaded once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Timer countdown effect
@@ -123,17 +130,15 @@ export default function PaymentPage() {
       if (!currentBookingId) return;
 
       try {
-        const response = await axios.post(`${baseURL}/api/bookings/check-expired`);
-        const pendingBookings = response.data.pendingBookings;
-        const currentBooking = pendingBookings.find((b: any) => b.id === currentBookingId);
-        
-        if (currentBooking) {
-          const serverRemainingTime = Math.floor(currentBooking.remainingTime / 1000); // Convert to seconds
-          if (Math.abs(serverRemainingTime - timeLeft) > 5) { // Only sync if difference is more than 5 seconds
+        const response = await axios.get(`${baseURL}/api/bookings/${currentBookingId}`);
+        const currentBooking = response.data;
+
+        if (currentBooking.status === 'pending_payment' && currentBooking.paymentDeadline) {
+          const serverRemainingTime = Math.max(0, Math.floor((new Date(currentBooking.paymentDeadline).getTime() - Date.now()) / 1000));
+          if (Math.abs(serverRemainingTime - timeLeft) > 5) {
             setTimeLeft(serverRemainingTime);
           }
         } else {
-          // Booking not found in pending list - might have expired
           setIsTimerActive(false);
           handlePaymentTimeout();
         }
@@ -150,6 +155,8 @@ export default function PaymentPage() {
         clearInterval(timerSyncInterval);
       }
     };
+  // Timer callbacks/state are intentionally captured per active timer session.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isTimerActive, pendingBookingId, timeLeft]);
 
   // Add this cleanup effect
@@ -218,11 +225,14 @@ export default function PaymentPage() {
         });
       } catch (error: any) {
         console.error("Error cancelling booking:", error);
+        setIsSubmitting(false);
+        setIsTimerActive(true);
         toast({
           title: "ข้อผิดพลาด",
           description: "ไม่สามารถยกเลิกการจองได้ กรุณาลองใหม่",
           variant: "destructive",
         });
+        return;
       }
     }
 
@@ -238,44 +248,14 @@ export default function PaymentPage() {
     const currentBookingId = pendingBookingId || sessionStorage.getItem('pendingBookingId');
     if (!currentBookingId) return;
 
-    // Function to check expired status
-    const checkExpiredStatus = async (): Promise<boolean> => {
-      try {
-        const res = await axios.post(`${baseURL}/api/bookings/check-expired`,
-          { headers: { "Content-Type": "application/json" } }
-        );
-        return res.status === 200;
-      } catch (error) {
-        console.error("Error checking expired status:", error);
-        return false;
-      }
-    };
-
-    // Keep checking until we get a success response
-    const retryInterval = setInterval(async () => {
-      const isExpired = await checkExpiredStatus();
-
-      if (isExpired) {
-        clearInterval(retryInterval);
-
-        toast({
-          title: "หมดเวลาชำระเงิน",
-          description: "การจองของคุณถูกยกเลิกแล้ว",
-          variant: "destructive",
-        });
-
-        // Clear booking data and redirect
-        clearBooking();
-        sessionStorage.removeItem('pendingBookingId');
-        router.push("/");
-      }
-    }, 5000); // Check every 5 seconds
-
-    // Clear interval after 2 minutes to prevent infinite checking
-    setTimeout(() => {
-      clearInterval(retryInterval);
-      console.log("Stopped checking expired status after timeout");
-    }, 2 * 60 * 1000);
+    toast({
+      title: "หมดเวลาชำระเงิน",
+      description: "กรุณาสร้างการจองใหม่อีกครั้ง",
+      variant: "destructive",
+    });
+    clearBooking();
+    sessionStorage.removeItem('pendingBookingId');
+    router.push("/");
   };
 
   const handleConfirmPayment = async () => {
@@ -308,13 +288,13 @@ export default function PaymentPage() {
         // ใช้ confirm payment API สำหรับ upload
         const formData = new FormData();
         formData.append("paymentProof", paymentImage);
-        formData.append("amount", totalPrice.toString());
 
         const response = await axios.post(`${baseURL}/api/bookings/${currentBookingId}/confirm-payment`, formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
 
         // อัปเดต state ด้วยข้อมูลการจอง
+        markSeatsBooked(response.data.seats);
         addBookingRecord({
           id: response.data.id,
           customerName: response.data.customerName,
@@ -396,6 +376,48 @@ export default function PaymentPage() {
           variant: "destructive",
         });
       }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAdminConfirmBooking = async () => {
+    const currentBookingId = pendingBookingId || sessionStorage.getItem('pendingBookingId');
+    if (!currentBookingId) return;
+
+    setIsSubmitting(true);
+    setIsTimerActive(false);
+    try {
+      const response = await axios.patch(`${baseURL}/api/bookings/${currentBookingId}`, {
+        status: "confirmed",
+      });
+      const booking = response.data;
+      markSeatsBooked(booking.seats);
+      addBookingRecord({
+        id: booking.id,
+        customerName: booking.customerName,
+        phone: booking.phone,
+        seats: booking.seats,
+        notes: booking.notes,
+        totalPrice: booking.totalPrice,
+        status: "confirmed",
+        bookingDate: booking.bookingDate,
+        paymentProof: booking.paymentProof || null,
+      });
+      sessionStorage.removeItem('pendingBookingId');
+      clearBooking();
+      const emailStatus = booking.ticketEmailStatus;
+      const emailDescription = emailStatus?.sent
+        ? "ส่งอีเมลตั๋วแล้ว · ไม่ได้ตรวจสอบสลิป"
+        : emailStatus?.skipped
+          ? `ยืนยันแล้ว แต่ไม่ได้ส่งอีเมล (${emailStatus.reason}) · ไม่ได้ตรวจสอบสลิป`
+          : "ยืนยันแล้ว แต่ส่งอีเมลไม่สำเร็จ · ไม่ได้ตรวจสอบสลิป";
+      toast({ title: "ยืนยันการจองสำหรับทดสอบแล้ว", description: emailDescription });
+      router.push(`/ticket?bookingId=${booking.id}`);
+    } catch (error) {
+      console.error("Error confirming booking as admin:", error);
+      setIsTimerActive(true);
+      toast({ title: "ยืนยันการจองไม่สำเร็จ", description: "กรุณาลองใหม่อีกครั้ง", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -488,9 +510,11 @@ export default function PaymentPage() {
                 const tablePosition = tablePositions.find((t) => t.id === seat.tableId);
                 const seatKey = seat.id || `${seat.tableId}-${seat.seatNumber}-${index}`;
                 return (
-                  <div key={seatKey} className="flex justify-between items-center p-2 bg-muted rounded">
-                    <span>
-                      {tablePosition?.name || `โต๊ะ ${seat.tableId}`} ที่นั่ง {seat.seatNumber}
+                  <div key={seatKey} className="flex items-center justify-between gap-4 rounded bg-muted p-2">
+                    <span>{tablePosition?.name || seat.tableName || `โต๊ะ ${seat.tableId}`} ที่นั่ง {seat.seatNumber}</span>
+                    <span className="text-right">
+                      <span className="block font-medium">{seat.studentName || "ยังไม่ระบุชื่อ"}</span>
+                      {seat.classLevel && <span className="block text-sm text-muted-foreground">{seat.classLevel}</span>}
                     </span>
                   </div>
                 );
@@ -567,11 +591,7 @@ export default function PaymentPage() {
                 <div className="mt-4">
                   <Label className="text-sm font-medium">ตัวอย่างรูปภาพ</Label>
                   <div className="mt-2 border rounded-lg overflow-hidden">
-                    <img
-                      src={imagePreview || "/placeholder.svg"}
-                      alt="Payment proof"
-                      className="w-full h-full object-cover"
-                    />
+                    <Image src={imagePreview || "/placeholder.svg"} alt="Payment proof" width={800} height={600} unoptimized className="w-full h-full object-cover" />
                   </div>
                 </div>
               )}
@@ -608,6 +628,19 @@ export default function PaymentPage() {
           )}
         </Button>
       </div>
+
+      {user?.role === "admin" && bookingData?.status === "pending_payment" && (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full border-primary text-primary hover:bg-pink-50"
+          onClick={handleAdminConfirmBooking}
+          disabled={isLoading || isSubmitting}
+        >
+          <CheckCircle2 className="mr-2 h-4 w-4" />
+          ยืนยันการจองสำหรับทดสอบ (ไม่ตรวจสลิป)
+        </Button>
+      )}
     </div>
   );
 }

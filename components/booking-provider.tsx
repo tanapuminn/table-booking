@@ -1,6 +1,7 @@
 "use client"
 
 import axios from "axios"
+import { useAuth } from "./auth-provider"
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
 
 const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
@@ -23,6 +24,8 @@ interface Seat {
   tableId: number
   seatNumber: number
   isBooked: boolean
+  studentName: string
+  classLevel: string
 }
 
 interface BookingInfo {
@@ -35,7 +38,7 @@ export interface BookingRecord {
   id: string
   customerName: string
   phone: string
-  seats: Array<{ tableId: number; seatNumber: number; zone: string; tableName?: string }>
+  seats: Array<{ tableId: number; seatNumber: number; zone: string; tableName?: string; studentName?: string; classLevel?: string; checkIn?: { checkedIn: boolean; checkedInAt?: string; checkedInBy?: string } }>
   notes?: string
   totalPrice: number
   status: "pending" | "pending_payment" | "confirmed" | "cancelled" | "payment_timeout"
@@ -85,6 +88,7 @@ interface BookingContextType {
   addTable: (zone: string, x: number, y: number) => void
   removeTable: (tableId: number) => void
   toggleTableActive: (tableId: number) => void
+  markSeatsBooked: (seats: Array<{ tableId: number; seatNumber: number; zone: string }>) => void
   calculateTotalPrice: (selectedSeats: Seat[]) => number
   calculateDetailedPrice: (selectedSeats: Seat[]) => {
     details: Array<{
@@ -120,6 +124,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryTrigger, setRetryTrigger] = useState(0);
+  const { user, isLoading: authLoading } = useAuth();
 
   // ฟังก์ชันสำหรับ retry API calls
   const retryApiCall = async (apiCall: () => Promise<any>, maxRetries = 3) => {
@@ -145,6 +150,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
   // ดึงข้อมูลจาก API เมื่อ component mount
   useEffect(() => {
     const fetchData = async () => {
+      if (authLoading) return;
       setIsLoading(true);
       setError(null);
 
@@ -153,15 +159,20 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         const response = await retryApiCall(() => axios.get(`${baseURL}/api/health-check`));
 
         const fetchWithRetry = async () => {
-          const [bookingsRes, zonesRes, tablesRes] = await Promise.all([
-            retryApiCall(() => axios.get(`${baseURL}/api/bookings`)),
+          const [zonesRes, tablesRes] = await Promise.all([
             retryApiCall(() => axios.get(`${baseURL}/api/zones`)),
             retryApiCall(() => axios.get(`${baseURL}/api/tables`)),
           ]);
 
-          setBookingHistory(bookingsRes.data);
           setZoneConfigs(zonesRes.data);
           setTablePositions(tablesRes.data);
+
+          if (user?.role === 'admin') {
+            const bookingsRes = await retryApiCall(() => axios.get(`${baseURL}/api/bookings`));
+            setBookingHistory(bookingsRes.data);
+          } else {
+            setBookingHistory([]);
+          }
         };
 
         if (response.data.status === 'healthy') {
@@ -184,7 +195,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
     };
 
     fetchData();
-  }, [retryTrigger]);
+  }, [retryTrigger, user?.role, authLoading]);
 
   const addBookingRecord = useCallback((record: BookingRecord) => {
     setBookingHistory((prev) => {
@@ -347,6 +358,17 @@ export function BookingProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const markSeatsBooked = useCallback((seats: Array<{ tableId: number; seatNumber: number; zone: string }>) => {
+    const bookedSeats = new Set(seats.map((seat) => `${seat.zone}-${seat.tableId}-${seat.seatNumber}`));
+    setTablePositions((previous) => previous.map((table) => ({
+      ...table,
+      seats: table.seats.map((seat) => bookedSeats.has(`${table.zone}-${table.id}-${seat.seatNumber}`)
+        ? { ...seat, isBooked: true }
+        : seat
+      ),
+    })));
+  }, []);
+
   const clearBooking = useCallback(() => {
     setSelectedSeats([]);
     setBookingInfo(null);
@@ -497,6 +519,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         addTable,
         removeTable,
         toggleTableActive,
+        markSeatsBooked,
         calculateTotalPrice,
         calculateDetailedPrice,
         isLoading,

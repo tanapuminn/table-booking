@@ -207,8 +207,8 @@ return (
   <div className="space-y-6">
     <Card>
       <CardHeader>
-        <div className="flex justify-between items-center">
-          <CardTitle className="flex items-center gap-2">
+        <div className="flex flex-wrap justify-between items-center gap-4">
+          <CardTitle className="flex min-w-0 items-center gap-2">
             <Move className="h-5 w-5" />
             จัดการตำแหน่งโต๊ะ
           </CardTitle>
@@ -224,8 +224,8 @@ return (
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-wrap justify-between items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
             <Label>เลือกโซน:</Label>
             <Select value={selectedZone} onValueChange={setSelectedZone}>
               <SelectTrigger className="w-32">
@@ -326,9 +326,9 @@ return (
         </AlertDialog>
 
         {/* Grid Layout */}
-        <div className={cn("relative border-2 rounded-lg p-4", getZoneColor(selectedZone))}>
+        <div className={cn("relative overflow-x-auto border-2 rounded-lg p-4", getZoneColor(selectedZone))}>
           <div
-            className="grid gap-1 mx-auto"
+            className="grid gap-1 mx-auto min-w-max"
             style={{
               gridTemplateColumns: `repeat(${gridSize.cols}, ${cellSize}px)`,
               gridTemplateRows: `repeat(${gridSize.rows}, ${cellSize}px)`,
@@ -356,7 +356,7 @@ return (
                   {table ? (
                     <div
                       className={cn(
-                        "w-full h-full rounded-full flex flex-col items-center justify-center text-xs font-medium border-2 transition-all",
+                        "relative w-full h-full rounded-full flex flex-col items-center justify-center text-xs leading-tight font-medium border-2 transition-all",
                         getTableColor(table),
                         isEditMode ? "cursor-move hover:scale-105" : "",
                         !table.isActive && "opacity-50",
@@ -369,11 +369,11 @@ return (
                       <span className="text-xs opacity-75">9 ที่นั่ง</span>
 
                       {isEditMode && (
-                        <div className="absolute -top-2 -right-2 flex gap-1">
+                        <div className="absolute top-0 right-0 z-20 flex gap-1">
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-6 w-6 p-0 bg-white"
+                            className="h-7 w-7 p-0 bg-white shadow-sm"
                             onClick={(e) => {
                               e.stopPropagation()
                               toggleTableActive(table.id)
@@ -386,7 +386,7 @@ return (
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-6 w-6 p-0 bg-red-50 hover:bg-red-100"
+                                className="h-7 w-7 p-0 bg-red-50 hover:bg-red-100 shadow-sm"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <Trash2 className="h-3 w-3" />
@@ -447,12 +447,12 @@ return (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h4 className="font-medium text-blue-900 mb-2">คำแนะนำการใช้งาน:</h4>
           <ul className="text-sm text-blue-800 space-y-1">
-            <li>• เปิด "โหมดแก้ไข" เพื่อจัดการตำแหน่งโต๊ะ</li>
+            <li>• เปิด &quot;โหมดแก้ไข&quot; เพื่อจัดการตำแหน่งโต๊ะ</li>
             <li>• คลิกในช่องว่าง (สีเทา) เพื่อเพิ่มโต๊ะใหม่</li>
             <li>• ลากโต๊ะเพื่อย้ายตำแหน่ง</li>
             <li>• คลิกปุ่มสีน้ำเงิน/ดำ เพื่อเปิด/ปิดการใช้งานโต๊ะ</li>
             <li>• คลิกปุ่มถังขยะเพื่อลบโต๊ะ</li>
-            <li>• คลิกปุ่ม "ปรับขนาด Grid" เพื่อกำหนดจำนวนแถวและคอลัมน์</li>
+            <li>• คลิกปุ่ม &quot;ปรับขนาด Grid&quot; เพื่อกำหนดจำนวนแถวและคอลัมน์</li>
           </ul>
         </div>
       </CardContent>

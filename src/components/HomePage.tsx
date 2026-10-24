@@ -1,7 +1,7 @@
 "use client"
 import React from "react"
 import { useEffect, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useLoadingRouter } from "@/components/navigation-loading"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -9,13 +9,15 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { TableMap } from "@/components/table-map"
 import { useBooking } from "@/components/booking-provider"
+import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
-import { Settings, User, Copyright, Loader2 } from "lucide-react"
+import { User, Loader2 } from "lucide-react"
 
 
 export default function HomePage() {
-    const router = useRouter()
+    const router = useLoadingRouter()
     const { selectedSeats, setBookingInfo, calculateTotalPrice, tablePositions } = useBooking()
+    const { user } = useAuth()
     const { toast } = useToast()
 
     const [customerInfo, setCustomerInfo] = useState({
@@ -26,7 +28,19 @@ export default function HomePage() {
     const [isLoading, setIsLoading] = useState(false)
 
     const formRef = useRef<HTMLDivElement | null>(null)
+    const hasPrefilledUserRef = useRef(false)
+    const currentStep = selectedSeats.length > 0 ? 2 : 1
 
+    useEffect(() => {
+        if (!user || hasPrefilledUserRef.current) return
+
+        setCustomerInfo((prev) => ({
+            ...prev,
+            name: prev.name || user.fullname || "",
+            phone: prev.phone || user.phone || "",
+        }))
+        hasPrefilledUserRef.current = true
+    }, [user])
     const scrollToForm = () => {
         setTimeout(() => {
             formRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -73,6 +87,8 @@ export default function HomePage() {
                     tableId: seat.tableId,
                     seatNumber: seat.seatNumber,
                     zone: tablePositions.find((t) => t.id === seat.tableId)?.zone || "",
+                    studentName: seat.studentName,
+                    classLevel: seat.classLevel,
                 }))),
                 notes: customerInfo.notes || "",
                 bookingDate: new Date().toISOString(),
@@ -84,6 +100,7 @@ export default function HomePage() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                credentials: 'include',
                 body: JSON.stringify(bookingData),
             });
 
@@ -141,18 +158,22 @@ export default function HomePage() {
         }
     }
 
-    const navigateToDashboard = () => {
-        router.push("/psmnlp-dashboard")
-    }
-
     return (
         <div className="space-y-8">
-            {/* Header section */}
-            <div className="flex justify-between items-center">
-                <div className="text-center flex-1">
-                    <h2 className="text-3xl font-bold mb-2">แผนผังการจอง</h2>
-                    <p className="text-muted-foreground">เลือกโต๊ะหรือที่นั่งที่ต้องการจอง</p>
-                </div>
+            <div className="mx-auto flex max-w-3xl items-center justify-between gap-2 text-xs font-medium sm:text-sm" aria-label="ขั้นตอนการจอง">
+                {[
+                    { number: 1, label: "เลือกโต๊ะ" },
+                    { number: 2, label: "ข้อมูลผู้จอง" },
+                    { number: 3, label: "ชำระเงิน" },
+                ].map((step, index) => (
+                    <React.Fragment key={step.number}>
+                        {index > 0 && <div className={`h-px min-w-3 flex-1 ${step.number <= currentStep ? "bg-primary" : "bg-slate-200"}`} />}
+                        <div aria-current={step.number === currentStep ? "step" : undefined} className={`flex items-center gap-1.5 whitespace-nowrap ${step.number === currentStep ? "text-primary" : "text-slate-500"}`}>
+                            <span className={`flex h-8 w-8 items-center justify-center rounded-full ${step.number <= currentStep ? "bg-primary text-white" : "bg-slate-100"}`}>{step.number}</span>
+                            <span>{step.label}</span>
+                        </div>
+                    </React.Fragment>
+                ))}
             </div>
 
             {/* Stage section */}
@@ -165,33 +186,18 @@ export default function HomePage() {
 
             {/* Booking form */}
             {selectedSeats.length > 0 && (
-                <Card ref={formRef}>
+                <Card ref={formRef} className="rounded-2xl border-slate-200 shadow-sm">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <User className="h-5 w-5" />
-                            ข้อมูลการจอง
+                            ข้อมูลผู้จอง
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        {/* Selected seats */}
-                        <div>
-                            <p className="font-medium mb-2">ที่นั่งที่เลือก:</p>
-                            <div className="flex flex-wrap gap-2">
-                                {selectedSeats.map((seat) => {
-                                    const table = tablePositions.find(t => t.id === seat.tableId);
-                                    const isVip = table?.zone === "VIP";
-                                    return (
-                                        <span
-                                            key={seat.id}
-                                            className={`${isVip ? 'bg-pink-100' : 'bg-blue-100'} text-black px-2 py-1 rounded text-sm`}
-                                        >
-                                            โต๊ะ {table?.name} ที่นั่ง {seat.seatNumber}
-                                            {isVip && ' (VIP)'}
-                                        </span>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        <p className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                            ยืนยันการจอง {new Set(selectedSeats.map((seat) => seat.tableId)).size} โต๊ะ · {selectedSeats.length} ที่นั่ง · {calculateTotalPrice(selectedSeats).toLocaleString("th-TH")} บาท
+                            <span className="ml-1 text-slate-500">(แก้ไขรายการได้จากสรุปรายการด้านบน)</span>
+                        </p>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
@@ -226,7 +232,8 @@ export default function HomePage() {
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="notes">หมายเหตุ: ระบุชื่อนักเรียนพร้อมระบุจำนวนที่นั่งที่ทำการจอง (กรณีรวมโต๊ะกับท่านอื่น) เพื่อนำไปออกตั๋วเข้างาน</Label>
+                            <Label htmlFor="notes">หมายเหตุ (ถ้ามี)</Label>
+                            <p className="text-sm text-muted-foreground">หากรวมโต๊ะกับผู้อื่น กรุณาระบุชื่อนักเรียนและจำนวนที่นั่งเพื่อออกตั๋วเข้างาน</p>
                             <Textarea
                                 id="notes"
                                 value={customerInfo.notes}
@@ -236,7 +243,7 @@ export default function HomePage() {
                             />
                         </div>
 
-                        <Button onClick={handleBooking} className="w-full" size="lg">
+                        <Button onClick={handleBooking} className="h-12 w-full text-base" size="lg" disabled={isLoading}>
                             ดำเนินการจอง
                         </Button>
                     </CardContent>
@@ -254,14 +261,6 @@ export default function HomePage() {
                 </div>
             )}
 
-            {/* New Footer */}
-            <footer className="py-6 text-center text-sm text-muted-foreground flex items-center justify-center gap-1">
-                <span>Copyright 2025</span>
-                <Copyright className="h-4 w-4"
-                    // onClick={navigateToDashboard}
-                />
-                <span>Tanapumin</span>
-            </footer>
         </div>
     )
 }
