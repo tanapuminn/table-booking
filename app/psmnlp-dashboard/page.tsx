@@ -36,8 +36,7 @@ import { useLoadingRouter } from "@/components/navigation-loading";
 import axios from "axios";
 import dayjs from "dayjs";
 import { cn } from "@/lib/utils";
-
-const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
+import { apiBaseUrl as baseURL } from "@/lib/api";
 
 type Section = "stats" | "bookings" | "checkin" | "zones" | "layout" | "settings";
 

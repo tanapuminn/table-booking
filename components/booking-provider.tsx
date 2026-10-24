@@ -3,8 +3,7 @@
 import axios from "axios"
 import { useAuth } from "./auth-provider"
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
-
-const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
+import { apiBaseUrl as baseURL } from "@/lib/api"
 
 // เพิ่ม axios interceptor เพื่อจัดการ errors
 axios.interceptors.response.use(

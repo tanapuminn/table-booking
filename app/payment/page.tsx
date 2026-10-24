@@ -17,8 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PriceSummary } from "@/components/price-summary";
 import { PaymentQRCode } from "@/components/payment-qr-code";
 import axios from "axios";
-
-const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
+import { apiBaseUrl as baseURL } from "@/lib/api";
 
 export default function PaymentPage() {
   const router = useLoadingRouter();

@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator"
 import { QrCode, Download, Copy, Check } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import axios from "axios"
+import { apiBaseUrl } from "@/lib/api"
 
 interface PaymentQRCodeProps {
   amount: number
@@ -42,7 +43,7 @@ export function PaymentQRCode({ amount, recipientName = "พัชรี เว�
   const [promptpayQrError, setPromptpayQrError] = useState(false)
 
   useEffect(() => {
-    axios.get(`${process.env.NEXT_PUBLIC_BASE_URL}/api/settings?includeBankImage=true`)
+    axios.get(`${apiBaseUrl}/api/settings?includeBankImage=true`)
       .then((res) => setBankSettings({
         paymentType: res.data?.paymentType === "promptpay" ? "promptpay" : "bank",
         bankName: res.data?.bankName || bankName,
@@ -65,7 +66,7 @@ export function PaymentQRCode({ amount, recipientName = "พัชรี เว�
     let cancelled = false
     setPromptpayQr("")
     setPromptpayQrError(false)
-    axios.get(`${process.env.NEXT_PUBLIC_BASE_URL}/api/settings/promptpay-qr`, { params: { amount } })
+    axios.get(`${apiBaseUrl}/api/settings/promptpay-qr`, { params: { amount } })
       .then((res) => { if (!cancelled) setPromptpayQr(res.data?.qrCode || "") })
       .catch(() => { if (!cancelled) setPromptpayQrError(true) })
     return () => { cancelled = true }

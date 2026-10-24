@@ -5,8 +5,7 @@ import Maintenance from "@/src/components/Maintenance"
 import checkServiceStatus from "@/src/utils/serviceStatus"
 import HomePage from "@/src/components/HomePage"
 import axios from "axios"
-
-const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
+import { apiBaseUrl as baseURL } from "@/lib/api"
 
 export default function DefaultPage() {
   const [isServiceAvailable, setIsServiceAvailable] = useState(true);

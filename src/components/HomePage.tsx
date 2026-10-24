@@ -12,6 +12,7 @@ import { useBooking } from "@/components/booking-provider"
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
 import { User, Loader2 } from "lucide-react"
+import { apiBaseUrl as baseURL } from "@/lib/api"
 
 
 export default function HomePage() {
@@ -94,7 +95,6 @@ export default function HomePage() {
                 bookingDate: new Date().toISOString(),
             };
 
-            const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
             const response = await fetch(`${baseURL}/api/bookings`, {
                 method: 'POST',
                 headers: {

@@ -11,8 +11,7 @@ import { CheckCircle, Download, Home } from "lucide-react";
 import { useBooking } from "@/components/booking-provider";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
-
-const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
+import { apiBaseUrl as baseURL } from "@/lib/api";
 
 type BookingSeat = {
   tableId: string;

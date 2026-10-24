@@ -8,9 +8,9 @@ import { useAuth } from "@/components/auth-provider"
 import { Button } from "@/components/ui/button"
 import { LayoutDashboard, LogOut, User } from "lucide-react"
 import Image from "next/image"
+import { apiBaseUrl as baseURL } from "@/lib/api"
 
 const AUTH_PATHS = ["/login", "/register"]
-const baseURL = process.env.NEXT_PUBLIC_BASE_URL
 
 type SiteSettings = {
   projectTitle: string

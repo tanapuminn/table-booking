@@ -20,8 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
-
-const baseURL = process.env.NEXT_PUBLIC_BASE_URL
+import { apiBaseUrl as baseURL } from "@/lib/api"
 
 type Screen = "profile" | "history"
 

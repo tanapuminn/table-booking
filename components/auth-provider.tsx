@@ -1,9 +1,8 @@
 "use client"
 
 import axios from "axios"
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
-
-const baseURL = process.env.NEXT_PUBLIC_BASE_URL
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react"
+import { apiBaseUrl } from "@/lib/api"
 
 export interface AuthUser {
   id: string
@@ -39,6 +38,7 @@ function clearLegacyClientAuth() {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const authRequestVersion = useRef(0)
 
   // Authentication is carried by the server-set HttpOnly cookie.
   useEffect(() => {
@@ -51,53 +51,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     clearLegacyClientAuth()
+    const requestVersion = authRequestVersion.current
 
     axios
-      .get(`${baseURL}/api/auth/me`)
+      .get(`${apiBaseUrl}/api/auth/me`)
       .then((res) => {
-        setUser(res.data.user)
+        if (requestVersion === authRequestVersion.current) setUser(res.data.user)
       })
       .catch(() => {
-        void axios.post(`${baseURL}/api/auth/logout`).catch(() => undefined)
-        setUser(null)
+        if (requestVersion === authRequestVersion.current) setUser(null)
       })
       .finally(() => {
-        setIsLoading(false)
+        if (requestVersion === authRequestVersion.current) setIsLoading(false)
       })
   }, [])
 
   const login = useCallback(async (phone: string, password: string) => {
-    const res = await axios.post(`${baseURL}/api/auth/login`, { phone, password })
+    authRequestVersion.current += 1
+    setIsLoading(false)
+    const res = await axios.post(`${apiBaseUrl}/api/auth/login`, { phone, password })
     const { user } = res.data as { user: AuthUser }
     setUser(user)
+    setIsLoading(false)
     return { user }
   }, [])
 
   const googleLogin = useCallback(async (credential: string) => {
-    const res = await axios.post(`${baseURL}/api/auth/google`, { credential })
+    authRequestVersion.current += 1
+    setIsLoading(false)
+    const res = await axios.post(`${apiBaseUrl}/api/auth/google`, { credential })
     const { user } = res.data as { user: AuthUser }
     setUser(user)
+    setIsLoading(false)
     return { user }
   }, [])
 
   const updateProfile = useCallback(async (values: { phone?: string; fullname?: string }) => {
-    const res = await axios.put(`${baseURL}/api/auth/profile`, values)
+    const res = await axios.put(`${apiBaseUrl}/api/auth/profile`, values)
     const { user } = res.data as { user: AuthUser }
     setUser(user)
     return { user }
   }, [])
 
   const logout = useCallback(() => {
-    void axios.post(`${baseURL}/api/auth/logout`).finally(() => {
+    authRequestVersion.current += 1
+    setUser(null)
+    void axios.post(`${apiBaseUrl}/api/auth/logout`).finally(() => {
       clearLegacyClientAuth()
-      setUser(null)
     })
   }, [])
 
   const register = useCallback(async (phone: string, email: string, password: string, fullname: string, googleCredential?: string) => {
-    const res = await axios.post(`${baseURL}/api/auth/register`, { phone, email, password, fullname, googleCredential })
+    authRequestVersion.current += 1
+    setIsLoading(false)
+    const res = await axios.post(`${apiBaseUrl}/api/auth/register`, { phone, email, password, fullname, googleCredential })
     const { user } = res.data as { user: AuthUser }
     setUser(user)
+    setIsLoading(false)
   }, [])
 
   return (

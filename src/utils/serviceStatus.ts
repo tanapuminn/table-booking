@@ -1,5 +1,5 @@
 import axios from "axios";
-const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
+import { apiBaseUrl as baseURL } from "@/lib/api";
 
 const checkServiceStatus = async (): Promise<boolean> => {
   try {

@@ -10,8 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-
-const baseURL = process.env.NEXT_PUBLIC_BASE_URL;
+import { apiBaseUrl as baseURL } from "@/lib/api";
 type ReservedSeat = BookingRecord["seats"][number] & { booking: BookingRecord };
 
 const getSeatKey = (seat: { tableId: number; seatNumber: number; zone: string }) =>
