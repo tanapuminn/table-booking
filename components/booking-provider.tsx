@@ -90,7 +90,7 @@ interface BookingContextType {
   toggleTableActive: (tableId: number) => void
   markSeatsBooked: (seats: Array<{ tableId: number; seatNumber: number; zone: string }>) => void
   calculateTotalPrice: (selectedSeats: Seat[]) => number
-  calculateDetailedPrice: (selectedSeats: Seat[]) => {
+  calculateDetailedPrice: (selectedSeats: Array<{ tableId: number; seatNumber: number }>) => {
     details: Array<{
       tableId: number
       tableName: string
@@ -412,8 +412,8 @@ export function BookingProvider({ children }: { children: ReactNode }) {
   );
 
   const calculateDetailedPrice = useCallback(
-    (selectedSeats: Seat[]) => {
-      const tableGroups: Record<string, { zone: string; seats: Seat[]; tableId: number }> = {};
+    (selectedSeats: Array<{ tableId: number; seatNumber: number }>) => {
+      const tableGroups: Record<string, { zone: string; seats: Array<{ tableId: number; seatNumber: number }>; tableId: number }> = {};
 
       selectedSeats.forEach((seat) => {
         const table = tablePositions.find((t) => t.id === seat.tableId);
