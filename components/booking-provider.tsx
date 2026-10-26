@@ -1,6 +1,7 @@
 "use client"
 
 import axios from "axios"
+import { usePathname } from "next/navigation"
 import { useAuth } from "./auth-provider"
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
 import { apiBaseUrl as baseURL } from "@/lib/api"
@@ -78,10 +79,11 @@ interface BookingContextType {
   clearBooking: () => void
   bookingHistory: BookingRecord[]
   addBookingRecord: (record: BookingRecord) => void
-  updateBookingRecord: (id: string, updates: Partial<BookingRecord>) => void
+  updateBookingRecord: (id: string, updates: Partial<BookingRecord>) => Promise<BookingRecord>
   setBookingHistory: React.Dispatch<React.SetStateAction<BookingRecord[]>>;
   zoneConfigs: ZoneConfig[]
   updateZoneConfig: (zoneId: string, updates: Partial<ZoneConfig>) => void
+  removeZoneConfig: (zoneId: string) => void
   tablePositions: TablePosition[]
   updateTablePosition: (tableId: number, x: number, y: number) => void
   addTable: (zone: string, x: number, y: number) => void
@@ -114,6 +116,7 @@ const BookingContext = createContext<BookingContextType | undefined>(undefined)
 
 // เพิ่มฟังก์ชันคำนวณราคาใน BookingProvider
 export function BookingProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const [selectedSeats, setSelectedSeats] = useState<Seat[]>([]);
   const [bookingInfo, setBookingInfo] = useState<BookingInfo | null>(null);
   const [paymentProof, setPaymentProof] = useState<File | null>(null);
@@ -166,7 +169,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
           setZoneConfigs(zonesRes.data);
           setTablePositions(tablesRes.data);
 
-          if (user?.role === 'admin') {
+          if (user?.role === 'admin' && pathname.startsWith('/psmnlp-dashboard')) {
             const bookingsRes = await retryApiCall(() => axios.get(`${baseURL}/api/bookings`));
             setBookingHistory(bookingsRes.data);
           } else {
@@ -194,7 +197,41 @@ export function BookingProvider({ children }: { children: ReactNode }) {
     };
 
     fetchData();
-  }, [retryTrigger, user?.role, authLoading]);
+  }, [retryTrigger, user?.role, authLoading, pathname]);
+
+  // Keep an already-open booking map in sync with seats released or booked
+  // by other visitors. GET /api/tables refreshes expired holds on the server.
+  useEffect(() => {
+    if (authLoading || !user || pathname !== "/") return;
+
+    let active = true;
+    const refreshTables = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const { data } = await axios.get<TablePosition[]>(`${baseURL}/api/tables`);
+        if (!active || !Array.isArray(data)) return;
+        setTablePositions(data);
+        setSelectedSeats((previous) => previous.filter((selected) => {
+          const table = data.find((item) => item.id === selected.tableId);
+          return table?.isActive && table.seats.some((seat) =>
+            seat.seatNumber === selected.seatNumber && !seat.isBooked
+          );
+        }));
+      } catch (error) {
+        console.error("Failed to refresh table availability:", error);
+      }
+    };
+
+    const interval = window.setInterval(refreshTables, 15000);
+    window.addEventListener("focus", refreshTables);
+    document.addEventListener("visibilitychange", refreshTables);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshTables);
+      document.removeEventListener("visibilitychange", refreshTables);
+    };
+  }, [authLoading, pathname, user?.id]);
 
   const addBookingRecord = useCallback((record: BookingRecord) => {
     setBookingHistory((prev) => {
@@ -240,8 +277,6 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         }
         return acc;
       }, {} as Record<string, any>);
-
-      console.log('Sending updates:', cleanUpdates); // debug log
 
       const response = await axios.put(`${baseURL}/api/bookings/${id}`, cleanUpdates, {
         headers: {
@@ -294,6 +329,10 @@ export function BookingProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const removeZoneConfig = useCallback((zoneId: string) => {
+    setZoneConfigs((prev) => prev.filter((zone) => zone.id !== zoneId));
+  }, []);
+
   const updateTablePosition = useCallback(async (tableId: number, x: number, y: number) => {
     try {
       const response = await axios.put(`${baseURL}/api/tables/${tableId}`, { x, y });
@@ -343,6 +382,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
       setTablePositions((prev) => prev.filter((table) => table.id !== tableId));
     } catch (error) {
       console.error("Error removing table:", error);
+      throw error;
     }
   }, []);
 
@@ -513,6 +553,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         setBookingHistory,
         zoneConfigs,
         updateZoneConfig,
+        removeZoneConfig,
         tablePositions,
         updateTablePosition,
         addTable,

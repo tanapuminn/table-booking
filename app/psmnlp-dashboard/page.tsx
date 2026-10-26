@@ -53,7 +53,7 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const router = useLoadingRouter();
   const { user, isLoading: authLoading } = useAuth();
-  const { bookingHistory, updateBookingRecord, zoneConfigs, updateZoneConfig, setBookingHistory } = useBooking();
+  const { bookingHistory, updateBookingRecord, zoneConfigs, updateZoneConfig, removeZoneConfig, setBookingHistory } = useBooking();
 
   const [activeSection, setActiveSection] = useState<Section>("stats");
   const [searchTerm, setSearchTerm] = useState("");
@@ -67,6 +67,9 @@ export default function DashboardPage() {
   });
 
   const [siteSettings, setSiteSettings] = useState({
+    paymentConfigured: false,
+    bookingEnabled: false,
+    paymentTimeoutMinutes: 20,
     projectTitle: "",
     projectSubtitle: "",
     bankName: "",
@@ -81,6 +84,9 @@ export default function DashboardPage() {
   const [bankImagePreview, setBankImagePreview] = useState("");
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [isUpdatingBookingStatus, setIsUpdatingBookingStatus] = useState(false);
+  const [isSavingPaymentTimeout, setIsSavingPaymentTimeout] = useState(false);
+  const [isExportingBookings, setIsExportingBookings] = useState(false);
   useEffect(() => {
     if (!authLoading && user?.role !== "admin") router.replace("/");
   }, [user, authLoading, router]);
@@ -89,6 +95,9 @@ export default function DashboardPage() {
     axios
       .get(`${baseURL}/api/settings?includeBankImage=true&t=${Date.now()}`)
       .then((res) => setSiteSettings({
+        paymentConfigured: res.data?.paymentConfigured === true,
+        bookingEnabled: res.data?.bookingEnabled === true,
+        paymentTimeoutMinutes: Number.isInteger(res.data?.paymentTimeoutMinutes) ? res.data.paymentTimeoutMinutes : 20,
         projectTitle: res.data?.projectTitle || "",
         projectSubtitle: res.data?.projectSubtitle || "",
         bankName: res.data?.bankName || "",
@@ -99,7 +108,7 @@ export default function DashboardPage() {
         promptpayName: res.data?.promptpayName || "",
         promptpayNumber: res.data?.promptpayNumber || "",
       }))
-      .catch(() => setSiteSettings({ projectTitle: "", projectSubtitle: "", bankName: "", bankAccountName: "", bankAccountNumber: "", bankAccountImage: "", paymentType: "bank", promptpayName: "", promptpayNumber: "" }))
+      .catch(() => setSiteSettings({ paymentConfigured: false, bookingEnabled: false, paymentTimeoutMinutes: 20, projectTitle: "", projectSubtitle: "", bankName: "", bankAccountName: "", bankAccountNumber: "", bankAccountImage: "", paymentType: "bank", promptpayName: "", promptpayNumber: "" }))
       .finally(() => setIsLoadingSettings(false));
   };
 
@@ -166,10 +175,15 @@ export default function DashboardPage() {
     }
   };
 
-  const handleEditBooking = (updated: BookingRecord) => {
-    updateBookingRecord(updated.id, updated);
-    setEditingBooking(null);
-    toast({ title: "แก้ไขข้อมูลสำเร็จ", description: `การจอง ${updated.id} อัปเดตแล้ว` });
+  const handleEditBooking = async (updates: Partial<BookingRecord>) => {
+    if (!editingBooking) return;
+    try {
+      await updateBookingRecord(editingBooking.id, updates);
+      toast({ title: "แก้ไขข้อมูลสำเร็จ", description: `การจอง ${editingBooking.id} อัปเดตแล้ว` });
+      setEditingBooking(null);
+    } catch {
+      toast({ title: "แก้ไขข้อมูลไม่สำเร็จ", variant: "destructive" });
+    }
   };
 
   const handleDeleteBooking = async (bookingId: string) => {
@@ -180,6 +194,30 @@ export default function DashboardPage() {
       toast({ title: "ลบการจองเรียบร้อยแล้ว" });
     } catch {
       toast({ title: "เกิดข้อผิดพลาด", description: "ไม่สามารถลบการจองได้", variant: "destructive" });
+    }
+  };
+
+  const handleExportBookings = async () => {
+    setIsExportingBookings(true);
+    try {
+      const response = await axios.get<Blob>(`${baseURL}/api/bookings/export/xlsx`, { responseType: "blob" });
+      const contentType = String(response.headers["content-type"] || "");
+      if (!contentType.includes("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) {
+        throw new Error("Unexpected export response");
+      }
+      const filename = /filename="?([^";]+)"?/i.exec(String(response.headers["content-disposition"] || ""))?.[1] || "booking_report.xlsx";
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch {
+      toast({ title: "ส่งออก Excel ไม่สำเร็จ", description: "กรุณาลองใหม่อีกครั้ง", variant: "destructive" });
+    } finally {
+      setIsExportingBookings(false);
     }
   };
 
@@ -218,10 +256,15 @@ export default function DashboardPage() {
   const handleDeleteZone = async (zoneId: string) => {
     try {
       await axios.delete(`${baseURL}/api/zones/${zoneId}`);
-      updateZoneConfig(zoneId, { isActive: false });
+      removeZoneConfig(zoneId);
       toast({ title: "ลบโซนสำเร็จ", description: `โซน ${zoneId} ถูกลบแล้ว` });
-    } catch {
-      toast({ title: "ข้อผิดพลาด", description: "ไม่สามารถลบโซนได้", variant: "destructive" });
+    } catch (error) {
+      const message = axios.isAxiosError(error) && error.response?.status === 409
+        ? error.response.data?.message === "Cannot delete zone while it contains tables"
+          ? "ยังมีโต๊ะอยู่ในโซนนี้ กรุณาลบโต๊ะก่อน"
+          : "โซนนี้มีประวัติการจองที่เกี่ยวข้อง จึงไม่สามารถลบได้"
+        : "ไม่สามารถลบโซนได้";
+      toast({ title: "ลบโซนไม่สำเร็จ", description: message, variant: "destructive" });
     }
   };
 
@@ -261,6 +304,44 @@ export default function DashboardPage() {
     }
   };
 
+  const handleBookingStatusChange = async (bookingEnabled: boolean) => {
+    if (bookingEnabled && !siteSettings.paymentConfigured) {
+      toast({ title: "ยังเปิดรับจองไม่ได้", description: "กรุณาตั้งค่าช่องทางรับชำระเงินก่อน", variant: "destructive" });
+      return;
+    }
+    setIsUpdatingBookingStatus(true);
+    try {
+      const res = await axios.patch(`${baseURL}/api/settings/booking-status`, { bookingEnabled });
+      setSiteSettings(res.data);
+      window.dispatchEvent(new Event("site-settings-updated"));
+      toast({ title: bookingEnabled ? "เปิดรับจองแล้ว" : "ปิดรับจองแล้ว" });
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.response?.data?.error?.message || "เปลี่ยนสถานะการจองไม่สำเร็จ";
+      toast({ title: "เปลี่ยนสถานะไม่สำเร็จ", description: message, variant: "destructive" });
+    } finally {
+      setIsUpdatingBookingStatus(false);
+    }
+  };
+
+  const handleSavePaymentTimeout = async () => {
+    const minutes = siteSettings.paymentTimeoutMinutes;
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 180) {
+      toast({ title: "กรุณาระบุเวลา 1–180 นาที", variant: "destructive" });
+      return;
+    }
+    setIsSavingPaymentTimeout(true);
+    try {
+      const res = await axios.patch(`${baseURL}/api/settings/payment-timeout`, { paymentTimeoutMinutes: minutes });
+      setSiteSettings((previous) => ({ ...previous, paymentTimeoutMinutes: res.data.paymentTimeoutMinutes }));
+      toast({ title: `ตั้งเวลาชำระเงินเป็น ${minutes} นาทีแล้ว` });
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.response?.data?.error?.message || "บันทึกเวลาไม่สำเร็จ";
+      toast({ title: "บันทึกไม่สำเร็จ", description: message, variant: "destructive" });
+    } finally {
+      setIsSavingPaymentTimeout(false);
+    }
+  };
+
   const handleBankImageChange = (file?: File) => {
     if (!file) return;
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 2 * 1024 * 1024) {
@@ -284,9 +365,30 @@ export default function DashboardPage() {
   const SettingsSection = () => (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">ตั้งค่าเว็บไซต์</CardTitle>
+        <CardTitle className="text-base">ตั้งค่าระบบ</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {!isLoadingSettings && (
+          <div className={cn("flex items-center justify-between gap-4 rounded-lg border p-4", siteSettings.bookingEnabled ? "border-emerald-200 bg-emerald-50/50" : "border-amber-200 bg-amber-50/50")}>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Label htmlFor="booking-enabled" className="font-medium">เปิดรับจอง</Label>
+                <Badge role="status" className={siteSettings.bookingEnabled ? "border-emerald-200 bg-emerald-100 text-emerald-800 hover:bg-emerald-100" : "border-amber-200 bg-amber-100 text-amber-900 hover:bg-amber-100"}>
+                  {siteSettings.bookingEnabled ? "สถานะ: เปิดรับจอง" : "สถานะ: ปิดรับจอง"}
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {siteSettings.bookingEnabled ? "ผู้ใช้สามารถจองที่นั่งได้" : "ปิดรับจองชั่วคราว ผู้ใช้ยังสมัครสมาชิกและเข้าสู่ระบบได้"}
+              </p>
+            </div>
+            <Switch id="booking-enabled" checked={siteSettings.bookingEnabled} onCheckedChange={handleBookingStatusChange} disabled={isUpdatingBookingStatus || (!siteSettings.paymentConfigured && !siteSettings.bookingEnabled)} aria-label="เปิดหรือปิดรับจอง" />
+          </div>
+        )}
+        {!isLoadingSettings && !siteSettings.paymentConfigured && (
+          <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            ระบบยังไม่เปิดรับจอง กรุณากรอกบัญชีธนาคารหรือพร้อมเพย์ที่ใช้รับเงินจริง แล้วกดบันทึกการตั้งค่าเว็บ
+          </p>
+        )}
         {isLoadingSettings ? (
           <div className="space-y-3 py-2">
             <div className="h-9 animate-pulse rounded bg-muted" />
@@ -298,7 +400,7 @@ export default function DashboardPage() {
             <Tabs defaultValue="project" className="w-full">
               <TabsList className="grid w-full grid-cols-2 sm:w-fit">
                 <TabsTrigger value="project">ข้อมูลโครงการ</TabsTrigger>
-                <TabsTrigger value="bank">บัญชีธนาคาร</TabsTrigger>
+                <TabsTrigger value="bank">การชำระเงิน</TabsTrigger>
               </TabsList>
               <TabsContent value="project" className="space-y-4 pt-2">
                 <div className="space-y-2">
@@ -316,6 +418,17 @@ export default function DashboardPage() {
                 </div>
               </TabsContent>
               <TabsContent value="bank" className="space-y-4 pt-2">
+                <div className="rounded-lg border p-4">
+                  <Label htmlFor="payment-timeout-minutes" className="font-medium">เวลาชำระเงินหลังจอง</Label>
+                  <p className="mt-1 text-sm text-muted-foreground">กำหนดได้ 1–180 นาที มีผลกับการจองใหม่เท่านั้น รายการที่จองแล้วจะใช้กำหนดเวลาเดิม</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <Input id="payment-timeout-minutes" type="number" min={1} max={180} step={1} inputMode="numeric" className="w-28" value={siteSettings.paymentTimeoutMinutes || ""} onChange={(event) => setSiteSettings((previous) => ({ ...previous, paymentTimeoutMinutes: event.target.value === "" ? 0 : Number(event.target.value) }))} />
+                    <span className="text-sm text-muted-foreground">นาที</span>
+                    <Button type="button" variant="outline" onClick={handleSavePaymentTimeout} disabled={isSavingPaymentTimeout}>
+                      {isSavingPaymentTimeout ? "กำลังบันทึก..." : "บันทึกเวลา"}
+                    </Button>
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="payment-type">ช่องทางรับชำระเงิน</Label>
                   <Select value={siteSettings.paymentType} onValueChange={(value) => setSiteSettings((prev) => ({ ...prev, paymentType: value as "bank" | "promptpay" }))}>
@@ -426,8 +539,8 @@ export default function DashboardPage() {
             <SelectItem value="pending">รอดำเนินการ</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="secondary" onClick={() => window.open(`${baseURL}/api/bookings/export/xlsx`, "_blank")}>
-          📄 ส่งออก Excel
+        <Button variant="secondary" onClick={handleExportBookings} disabled={isExportingBookings}>
+          {isExportingBookings ? "กำลังส่งออก..." : "📄 ส่งออก Excel"}
         </Button>
       </div>
 
@@ -462,9 +575,9 @@ export default function DashboardPage() {
                       <Ticket className="h-4 w-4" />
                     </Button>
                   )}
-                  <Dialog>
+                  <Dialog open={editingBooking?.id === booking.id} onOpenChange={(open) => setEditingBooking(open ? booking : null)}>
                     <DialogTrigger asChild>
-                      <Button variant="outline" size="sm" title="แก้ไข" onClick={() => setEditingBooking(booking)}>
+                      <Button variant="outline" size="sm" title="แก้ไข">
                         <Edit className="h-4 w-4" />
                       </Button>
                     </DialogTrigger>
@@ -758,7 +871,7 @@ export default function DashboardPage() {
 
           {/* Section content */}
           {activeSection === "stats" && <BookingStats />}
-          {activeSection === "bookings" && <BookingsSection />}
+          {activeSection === "bookings" && BookingsSection()}
           {activeSection === "checkin" && <DashboardCheckInMap eventName={siteSettings.projectSubtitle || siteSettings.projectTitle || "โครงการปัจจุบัน"} />}
           {activeSection === "zones" && <ZonesSection />}
           {activeSection === "layout" && <TableLayoutEditor />}
@@ -774,7 +887,7 @@ function EditBookingForm({
   booking, onSave, onCancel,
 }: {
   booking: BookingRecord;
-  onSave: (b: BookingRecord) => void;
+  onSave: (updates: Partial<BookingRecord>) => Promise<void>;
   onCancel: () => void;
 }) {
   const [formData, setFormData] = useState({
@@ -785,7 +898,7 @@ function EditBookingForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ ...booking, customerName: formData.customerName, phone: formData.phone, notes: formData.notes || undefined });
+    void onSave({ customerName: formData.customerName, phone: formData.phone, notes: formData.notes });
   };
 
   return (

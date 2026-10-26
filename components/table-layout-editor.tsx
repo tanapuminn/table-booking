@@ -23,6 +23,7 @@ import { Plus, Trash2, Move, RotateCcw, Grid } from "lucide-react"
 import { useBooking, type TablePosition } from "./booking-provider"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import axios from "axios"
 
 export function TableLayoutEditor() {
   const { tablePositions, updateTablePosition, addTable, removeTable, toggleTableActive, zoneConfigs } = useBooking()
@@ -122,12 +123,22 @@ const handleTableDrop = (x: number, y: number) => {
   setDraggedTable(null)
 }
 
-const handleRemoveTable = (tableId: number) => {
-  removeTable(tableId)
-  toast({
-    title: "ลบโต๊ะสำเร็จ",
-    description: "ลบโต๊ะออกจากระบบเรียบร้อยแล้ว",
-  })
+const handleRemoveTable = async (tableId: number) => {
+  try {
+    await removeTable(tableId)
+    toast({
+      title: "ลบโต๊ะสำเร็จ",
+      description: "ลบโต๊ะออกจากระบบเรียบร้อยแล้ว",
+    })
+  } catch (error) {
+    toast({
+      title: "ลบโต๊ะไม่สำเร็จ",
+      description: axios.isAxiosError(error) && error.response?.status === 409
+        ? "โต๊ะนี้มีประวัติการจองที่เกี่ยวข้อง จึงไม่สามารถลบได้"
+        : "ไม่สามารถลบโต๊ะได้ กรุณาลองอีกครั้ง",
+      variant: "destructive",
+    })
+  }
 }
 
 const resetLayout = () => {

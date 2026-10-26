@@ -80,7 +80,7 @@ function getSeatLabel(seats: Seat[]) {
 
 export default function ProfilePage() {
   const router = useLoadingRouter()
-  const { user, updateProfile } = useAuth()
+  const { user, updateProfile, isLoading: authLoading } = useAuth()
   const { toast } = useToast()
   const [activeScreen, setActiveScreen] = useState<Screen>("profile")
   const [bookings, setBookings] = useState<Booking[]>([])
@@ -105,8 +105,8 @@ export default function ProfilePage() {
   }, [])
 
   useEffect(() => {
-    fetchBookings()
-  }, [fetchBookings])
+    if (activeScreen === "history" && !authLoading && user?.id) fetchBookings()
+  }, [activeScreen, authLoading, user?.id, fetchBookings])
 
   const handleSaveProfile = async () => {
     const fullname = formData.fullname.trim()
@@ -126,7 +126,6 @@ export default function ProfilePage() {
     try {
       await updateProfile({ fullname, phone })
       toast({ title: "บันทึกข้อมูลโปรไฟล์แล้ว" })
-      fetchBookings()
     } catch (error: any) {
       const message = error?.response?.data?.message || "ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่"
       toast({ title: "บันทึกไม่สำเร็จ", description: message, variant: "destructive" })

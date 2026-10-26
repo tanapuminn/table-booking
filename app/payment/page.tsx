@@ -2,7 +2,7 @@
 
 import type React from "react";
 import Image from "next/image"
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLoadingRouter } from "@/components/navigation-loading";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,7 +34,8 @@ export default function PaymentPage() {
   const [isTimerActive, setIsTimerActive] = useState(true);
   const [pendingBookingId, setPendingBookingId] = useState<string | null>(null);
   const [bookingData, setBookingData] = useState<any>(null);
-  const [timerSyncInterval, setTimerSyncInterval] = useState<NodeJS.Timeout | null>(null);
+  const serverClockOffsetMs = useRef(0);
+  const paymentDeadlineMs = bookingData?.paymentDeadline ? new Date(bookingData.paymentDeadline).getTime() : null;
 
   // โหลดข้อมูลการจองที่รอชำระเงิน
   useEffect(() => {
@@ -74,6 +75,19 @@ export default function PaymentPage() {
         }
 
         const booking = await response.json();
+        if (booking.status === 'confirmed') {
+          sessionStorage.removeItem('pendingBookingId');
+          router.push(`/ticket?bookingId=${booking.id}`);
+          return;
+        }
+        if (booking.status !== 'pending_payment') {
+          sessionStorage.removeItem('pendingBookingId');
+          clearBooking();
+          router.push('/');
+          return;
+        }
+        const serverNowMs = new Date(booking.serverNow).getTime();
+        if (Number.isFinite(serverNowMs)) serverClockOffsetMs.current = serverNowMs - Date.now();
         setPendingBookingId(bookingId);
         setBookingData(booking);
         setTotalPrice(booking.totalPrice);
@@ -81,9 +95,7 @@ export default function PaymentPage() {
         // คำนวณเวลาที่เหลือจาก paymentDeadline
         if (booking.paymentDeadline) {
           const deadline = new Date(booking.paymentDeadline);
-          const now = new Date();
-          const remainingTime = Math.max(0, Math.floor((deadline.getTime() - now.getTime()) / 1000));
-          console.log("Remaining time (seconds):", remainingTime);
+          const remainingTime = Math.max(0, Math.ceil((deadline.getTime() - Date.now() - serverClockOffsetMs.current) / 1000));
           setTimeLeft(remainingTime); // ถ้า remainingTime เป็น 0 ให้ใช้ 0 นาที
         } else {
           setTimeLeft(0); // ถ้าไม่มี deadline ให้ใช้ 0 นาที
@@ -107,65 +119,86 @@ export default function PaymentPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Timer countdown effect
+  // Compute from the booking deadline so background tabs and mobile app switching
+  // cannot pause or drift the displayed countdown.
   useEffect(() => {
-    if (!isTimerActive) return;
-    
-    // Initial timer setup
-    const timer = setInterval(() => {
-      setTimeLeft((prevTime) => {
-        if (prevTime <= 0) {
-          setIsTimerActive(false);
-          handlePaymentTimeout();
-          return 0;
-        }
-        return prevTime - 1;
+    const deadlineMs = paymentDeadlineMs;
+    if (!isTimerActive || !pendingBookingId || deadlineMs === null || !Number.isFinite(deadlineMs)) return;
+
+    let active = true;
+    let handledTimeout = false;
+    let syncing = false;
+    const expire = () => {
+      if (!active || handledTimeout) return;
+      handledTimeout = true;
+      setIsTimerActive(false);
+      setTimeLeft(0);
+      toast({
+        title: "หมดเวลาชำระเงิน",
+        description: "กรุณาสร้างการจองใหม่อีกครั้ง",
+        variant: "destructive",
       });
-    }, 1000);
+      clearBooking();
+      sessionStorage.removeItem('pendingBookingId');
+      router.push("/");
+    };
 
-    // Sync timer with server every 30 seconds
-    const syncTimer = setInterval(async () => {
-      const currentBookingId = pendingBookingId || sessionStorage.getItem('pendingBookingId');
-      if (!currentBookingId) return;
-
+    const syncBooking = async () => {
+      if (syncing || handledTimeout) return;
+      syncing = true;
       try {
-        const response = await axios.get(`${baseURL}/api/bookings/${currentBookingId}`);
-        const currentBooking = response.data;
-
-        if (currentBooking.status === 'pending_payment' && currentBooking.paymentDeadline) {
-          const serverRemainingTime = Math.max(0, Math.floor((new Date(currentBooking.paymentDeadline).getTime() - Date.now()) / 1000));
-          if (Math.abs(serverRemainingTime - timeLeft) > 5) {
-            setTimeLeft(serverRemainingTime);
-          }
-        } else {
+        const { data: currentBooking } = await axios.get(`${baseURL}/api/bookings/${pendingBookingId}`);
+        if (!active) return;
+        const serverNowMs = new Date(currentBooking.serverNow).getTime();
+        if (Number.isFinite(serverNowMs)) serverClockOffsetMs.current = serverNowMs - Date.now();
+        if (currentBooking.status === 'confirmed') {
           setIsTimerActive(false);
-          handlePaymentTimeout();
+          sessionStorage.removeItem('pendingBookingId');
+          router.push(`/ticket?bookingId=${currentBooking.id}`);
+        } else if (currentBooking.status !== 'pending_payment') {
+          expire();
+        } else {
+          setBookingData(currentBooking);
+          const remaining = Math.max(0, Math.ceil((new Date(currentBooking.paymentDeadline).getTime() - Date.now() - serverClockOffsetMs.current) / 1000));
+          setTimeLeft(remaining);
+          if (remaining === 0) expire();
         }
       } catch (error) {
-        console.error('Error syncing timer:', error);
-      }
-    }, 50000); // Sync every 50 seconds
-
-    setTimerSyncInterval(syncTimer);
-
-    return () => {
-      clearInterval(timer);
-      if (timerSyncInterval) {
-        clearInterval(timerSyncInterval);
+        console.error('Error syncing payment deadline:', error);
+        if (Date.now() + serverClockOffsetMs.current >= deadlineMs) expire();
+      } finally {
+        syncing = false;
       }
     };
-  // Timer callbacks/state are intentionally captured per active timer session.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTimerActive, pendingBookingId, timeLeft]);
 
-  // Add this cleanup effect
-  useEffect(() => {
-    return () => {
-      if (timerSyncInterval) {
-        clearInterval(timerSyncInterval);
+    const updateCountdown = () => {
+      const remaining = Math.max(0, Math.ceil((deadlineMs - Date.now() - serverClockOffsetMs.current) / 1000));
+      setTimeLeft(remaining);
+      if (remaining === 0) void syncBooking();
+    };
+
+    const onReturn = () => {
+      if (document.visibilityState === 'visible') {
+        updateCountdown();
+        void syncBooking();
       }
     };
-  }, [timerSyncInterval]);
+
+    updateCountdown();
+    const tick = window.setInterval(updateCountdown, 1000);
+    const serverSync = window.setInterval(() => { void syncBooking(); }, 50000);
+    document.addEventListener('visibilitychange', onReturn);
+    window.addEventListener('focus', onReturn);
+    window.addEventListener('pageshow', onReturn);
+    return () => {
+      active = false;
+      window.clearInterval(tick);
+      window.clearInterval(serverSync);
+      document.removeEventListener('visibilitychange', onReturn);
+      window.removeEventListener('focus', onReturn);
+      window.removeEventListener('pageshow', onReturn);
+    };
+  }, [isTimerActive, pendingBookingId, paymentDeadlineMs, clearBooking, router, toast]);
 
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -236,22 +269,6 @@ export default function PaymentPage() {
     }
 
     // ล้างข้อมูลการจอง
-    clearBooking();
-    sessionStorage.removeItem('pendingBookingId');
-    router.push("/");
-  };
-
-  const handlePaymentTimeout = async () => {
-    setIsTimerActive(false);
-
-    const currentBookingId = pendingBookingId || sessionStorage.getItem('pendingBookingId');
-    if (!currentBookingId) return;
-
-    toast({
-      title: "หมดเวลาชำระเงิน",
-      description: "กรุณาสร้างการจองใหม่อีกครั้ง",
-      variant: "destructive",
-    });
     clearBooking();
     sessionStorage.removeItem('pendingBookingId');
     router.push("/");
@@ -351,21 +368,22 @@ export default function PaymentPage() {
       sessionStorage.removeItem('pendingBookingId');
 
     } catch (error: any) {
-      console.log("Error confirming payment:", error);
       if (error.response?.status === 409) {
         toast({
           title: "ข้อผิดพลาด",
-          description: `ที่นั่งที่เลือกมีการจองแล้ว กรุณาเลือกที่นั่งอื่น`,
+          description: error.response.data?.message || "ไม่สามารถยืนยันการชำระเงินได้ กรุณาตรวจสอบรายการจอง",
           variant: "destructive",
         });
-        setTimeout(() => {
-          router.push(`/`);
-          window.location.reload();
-        }, 1500);
       } else if (error.response?.status === 400) {
         toast({
           title: "ข้อผิดพลาด",
           description: error.response.data.message || "ข้อมูลไม่ถูกต้อง กรุณาตรวจสอบและลองใหม่",
+          variant: "destructive",
+        });
+      } else if (error.response?.status === 503) {
+        toast({
+          title: "ระบบตรวจสลิปขัดข้องชั่วคราว",
+          description: error.response.data?.message || "กรุณาลองใหม่อีกครั้ง",
           variant: "destructive",
         });
       } else {
@@ -377,6 +395,7 @@ export default function PaymentPage() {
       }
     } finally {
       setIsSubmitting(false);
+      if (sessionStorage.getItem('pendingBookingId')) setIsTimerActive(true);
     }
   };
 

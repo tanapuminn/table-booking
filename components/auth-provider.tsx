@@ -58,8 +58,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((res) => {
         if (requestVersion === authRequestVersion.current) setUser(res.data.user)
       })
-      .catch(() => {
-        if (requestVersion === authRequestVersion.current) setUser(null)
+      .catch((error) => {
+        if (requestVersion !== authRequestVersion.current) return
+        setUser(null)
+
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+          const pathname = window.location.pathname
+          if (pathname !== "/" && pathname !== "/login" && pathname !== "/register") {
+            const redirect = encodeURIComponent(pathname + window.location.search)
+            window.location.replace(`/login?redirect=${redirect}`)
+          }
+        }
       })
       .finally(() => {
         if (requestVersion === authRequestVersion.current) setIsLoading(false)

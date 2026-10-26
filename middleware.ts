@@ -2,26 +2,58 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 const PUBLIC_PATHS = ["/login", "/register"]
+const ADMIN_PATH = "/psmnlp-dashboard"
 
-export function middleware(request: NextRequest) {
+const unavailableResponse = () => new NextResponse(
+  "ไม่สามารถตรวจสอบสิทธิ์ได้ชั่วคราว กรุณาลองใหม่อีกครั้ง",
+  { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } },
+)
+
+export async function middleware(request: NextRequest) {
   const token = request.cookies.get("auth_token")?.value
   const { pathname } = request.nextUrl
 
   const isPublicPath = PUBLIC_PATHS.some((p) => pathname === p)
+  const isAdminPath = pathname === ADMIN_PATH || pathname.startsWith(`${ADMIN_PATH}/`)
 
-  // On login/register: redirect to home if already logged in
-  if (isPublicPath) {
-    if (token) {
-      return NextResponse.redirect(new URL("/", request.url))
-    }
-    return NextResponse.next()
-  }
-
-  // Protected pages: redirect to login if not logged in
   if (!token) {
+    if (isPublicPath) return NextResponse.next()
     const loginUrl = new URL("/login", request.url)
     loginUrl.searchParams.set("redirect", pathname)
     return NextResponse.redirect(loginUrl)
+  }
+
+  // A present cookie can still contain an expired or revoked session.
+  // Validate it before redirecting away from /login or opening protected pages.
+  try {
+    const authUrl = new URL("/api/auth/me", request.url)
+    const authResponse = await fetch(authUrl, {
+      headers: { cookie: request.headers.get("cookie") || "" },
+      cache: "no-store",
+    })
+
+    if (authResponse.status === 401 || authResponse.status === 404) {
+      const response = isPublicPath
+        ? NextResponse.next()
+        : NextResponse.redirect(new URL(`/login?redirect=${encodeURIComponent(pathname)}`, request.url))
+      response.cookies.delete("auth_token")
+      return response
+    }
+
+    if (authResponse.ok && isPublicPath) {
+      return NextResponse.redirect(new URL("/", request.url))
+    }
+    if (isAdminPath) {
+      if (!authResponse.ok) return unavailableResponse()
+      const { user } = await authResponse.json()
+      if (user?.role !== "admin") {
+        return NextResponse.redirect(new URL("/", request.url))
+      }
+    }
+  } catch {
+    if (isAdminPath) return unavailableResponse()
+    // Keep the current page available when the API is temporarily unreachable.
+    // The client can show its maintenance state without discarding a valid cookie.
   }
 
   return NextResponse.next()

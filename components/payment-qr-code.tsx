@@ -5,18 +5,17 @@ import Image from "next/image"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { QrCode, Download, Copy, Check } from "lucide-react"
+import { QrCode, Copy, Check } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import axios from "axios"
 import { apiBaseUrl } from "@/lib/api"
 
 interface PaymentQRCodeProps {
   amount: number
-  recipientName?: string
-  bankName?: string
 }
 
 type PaymentSettings = {
+  paymentConfigured: boolean
   paymentType: "bank" | "promptpay"
   bankName: string
   bankAccountName: string
@@ -26,38 +25,43 @@ type PaymentSettings = {
   promptpayNumber: string
 }
 
-export function PaymentQRCode({ amount, recipientName = "พัชรี เวชยันต์วิวัฒน์", bankName = "ธนาคารไทยพาณิชย์" }: PaymentQRCodeProps) {
+export function PaymentQRCode({ amount }: PaymentQRCodeProps) {
   const { toast } = useToast()
   const [copied, setCopied] = useState(false)
   const [qrSize, setQrSize] = useState(220)
-  const [bankSettings, setBankSettings] = useState<PaymentSettings>({
-    paymentType: "bank",
-    bankName,
-    bankAccountName: recipientName,
-    bankAccountNumber: "",
-    bankAccountImage: "",
-    promptpayName: "",
-    promptpayNumber: "",
-  })
+  const [bankSettings, setBankSettings] = useState<PaymentSettings | null>(null)
   const [promptpayQr, setPromptpayQr] = useState("")
   const [promptpayQrError, setPromptpayQrError] = useState(false)
 
   useEffect(() => {
     axios.get(`${apiBaseUrl}/api/settings?includeBankImage=true`)
       .then((res) => setBankSettings({
+        paymentConfigured: res.data?.paymentConfigured === true,
         paymentType: res.data?.paymentType === "promptpay" ? "promptpay" : "bank",
-        bankName: res.data?.bankName || bankName,
-        bankAccountName: res.data?.bankAccountName || recipientName,
+        bankName: res.data?.bankName || "",
+        bankAccountName: res.data?.bankAccountName || "",
         bankAccountNumber: res.data?.bankAccountNumber || "",
         bankAccountImage: res.data?.bankAccountImage || "",
         promptpayName: res.data?.promptpayName || "",
         promptpayNumber: res.data?.promptpayNumber || "",
       }))
-      .catch((error) => console.error("Error loading bank account settings:", error))
-  }, [bankName, recipientName])
+      .catch((error) => {
+        console.error("Error loading payment settings:", error)
+        setBankSettings({
+          paymentConfigured: false,
+          paymentType: "bank",
+          bankName: "",
+          bankAccountName: "",
+          bankAccountNumber: "",
+          bankAccountImage: "",
+          promptpayName: "",
+          promptpayNumber: "",
+        })
+      })
+  }, [])
 
   useEffect(() => {
-    if (bankSettings.paymentType !== "promptpay" || !bankSettings.promptpayNumber || amount <= 0) {
+    if (!bankSettings?.paymentConfigured || bankSettings.paymentType !== "promptpay" || !bankSettings.promptpayNumber || amount <= 0) {
       setPromptpayQr("")
       setPromptpayQrError(false)
       return
@@ -70,7 +74,7 @@ export function PaymentQRCode({ amount, recipientName = "พัชรี เว�
       .then((res) => { if (!cancelled) setPromptpayQr(res.data?.qrCode || "") })
       .catch(() => { if (!cancelled) setPromptpayQrError(true) })
     return () => { cancelled = true }
-  }, [bankSettings.paymentType, bankSettings.promptpayNumber, amount])
+  }, [bankSettings?.paymentConfigured, bankSettings?.paymentType, bankSettings?.promptpayNumber, amount])
 
   // ปรับขนาด QR Code ตามขนาดหน้าจอ
   useEffect(() => {
@@ -88,8 +92,10 @@ export function PaymentQRCode({ amount, recipientName = "พัชรี เว�
   }, [])
 
   const handleCopyAccountNumber = () => {
-    if (!bankSettings.bankAccountNumber) return
-    navigator.clipboard.writeText(bankSettings.bankAccountNumber).then(() => {
+    if (!bankSettings?.paymentConfigured) return
+    const accountNumber = bankSettings.paymentType === "promptpay" ? bankSettings.promptpayNumber : bankSettings.bankAccountNumber
+    if (!accountNumber) return
+    navigator.clipboard.writeText(accountNumber).then(() => {
       setCopied(true)
       toast({
         title: bankSettings.paymentType === "promptpay" ? "คัดลอกเลขพร้อมเพย์แล้ว" : "คัดลอกเลขบัญชีแล้ว",
@@ -108,6 +114,9 @@ export function PaymentQRCode({ amount, recipientName = "พัชรี เว�
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col items-center pt-6 space-y-4">
+        {!bankSettings ? <p className="text-sm text-muted-foreground">กำลังโหลดช่องทางชำระเงิน...</p> : !bankSettings.paymentConfigured ? (
+          <p className="text-center text-sm text-destructive">ยังไม่เปิดรับชำระเงิน กรุณาติดต่อผู้ดูแลระบบ</p>
+        ) : <>
         <div className="text-center mb-2">
           {/* <p className="text-sm text-muted-foreground">PromptPay / พร้อมเพย์</p> */}
           <p className="text-xl text-muted-foreground">
@@ -159,6 +168,7 @@ export function PaymentQRCode({ amount, recipientName = "พัชรี เว�
         </div>
 
         <Separator />
+        </>}
         
       </CardContent>
     </Card>

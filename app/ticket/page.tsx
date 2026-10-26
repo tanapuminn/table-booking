@@ -7,7 +7,7 @@ import { useLoadingRouter } from "@/components/navigation-loading";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { CheckCircle, Download, Home } from "lucide-react";
+import { CheckCircle, Clock3, Home, XCircle } from "lucide-react";
 import { useBooking } from "@/components/booking-provider";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
@@ -25,6 +25,8 @@ type Booking = {
   customerName: string;
   phone: string;
   bookingDate: string;
+  status: "pending_payment" | "confirmed" | "cancelled" | "payment_timeout";
+  paymentDeadline?: string;
   notes?: string;
   seats: BookingSeat[];
   totalPrice: number;
@@ -87,10 +89,10 @@ function TicketContent() {
     router.push("/");
   };
 
-  const handleDownloadTicket = () => {
-    // Placeholder for PDF/image download
-    alert("ฟีเจอร์ดาวน์โหลดตั๋วจะพร้อมใช้งานเร็วๆ นี้");
-    // TODO: Implement PDF generation (e.g., using jsPDF)
+  const handleContinuePayment = () => {
+    if (!booking) return;
+    sessionStorage.setItem("pendingBookingId", booking.id);
+    router.push("/payment");
   };
 
   if (isLoading) {
@@ -112,17 +114,38 @@ function TicketContent() {
     );
   }
 
+  const isConfirmed = booking.status === "confirmed";
+  const isPending = booking.status === "pending_payment";
+  const paymentExpired = isPending && booking.paymentDeadline
+    ? new Date(booking.paymentDeadline).getTime() <= Date.now()
+    : false;
+  const statusTitle = isConfirmed ? "ยืนยันการจองแล้ว"
+    : isPending ? "รอชำระเงิน"
+    : booking.status === "cancelled" ? "การจองถูกยกเลิกแล้ว" : "หมดเวลาชำระเงินแล้ว";
+  const statusDescription = isConfirmed
+    ? "การจองได้รับการยืนยันแล้ว คุณสามารถเก็บหน้านี้ไว้ดูรายละเอียดได้"
+    : isPending && paymentExpired
+      ? "เลยกำหนดชำระเงินแล้ว กรุณาตรวจสอบสถานะอีกครั้งหรือสร้างการจองใหม่"
+      : isPending
+        ? "การจองยังไม่สมบูรณ์ กรุณาชำระเงินภายในเวลาที่กำหนด"
+        : "รายการนี้ใช้ยืนยันสิทธิ์ที่นั่งไม่ได้ กรุณาสร้างการจองใหม่หากยังต้องการที่นั่ง";
+  const statusClass = isConfirmed ? "text-green-700" : isPending ? "text-amber-700" : "text-red-700";
+  const cardClass = isConfirmed ? "border-green-200" : isPending ? "border-amber-200" : "border-red-200";
+  const headerClass = isConfirmed ? "bg-green-50" : isPending ? "bg-amber-50" : "bg-red-50";
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="text-center">
-        <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-        <h2 className="text-3xl font-bold mb-2 text-green-600">จองสำเร็จ!</h2>
-        <p className="text-muted-foreground">ขอบคุณที่ใช้บริการ กรุณาเก็บตั๋วนี้ไว้เป็นหลักฐาน</p>
+        {isConfirmed ? <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
+          : isPending ? <Clock3 className="h-16 w-16 text-amber-500 mx-auto mb-4" />
+            : <XCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />}
+        <h2 className={`text-3xl font-bold mb-2 ${statusClass}`}>{statusTitle}</h2>
+        <p className="text-muted-foreground">{statusDescription}</p>
       </div>
 
-      <Card className="border-2 border-green-200">
-        <CardHeader className="bg-green-50">
-          <CardTitle className="text-center text-2xl">ตั๋วจองโต๊ะ</CardTitle>
+      <Card className={`border-2 ${cardClass}`}>
+        <CardHeader className={headerClass}>
+          <CardTitle className="text-center text-2xl">{isConfirmed ? "ตั๋วจองโต๊ะ" : "รายละเอียดการจอง"}</CardTitle>
           <p className="text-center text-lg font-mono">{booking.id}</p>
         </CardHeader>
         <CardContent className="space-y-4 pt-6">
@@ -160,7 +183,7 @@ function TicketContent() {
           <Separator />
 
           <div>
-            <p className="text-sm font-medium text-muted-foreground mb-2">ที่นั่งที่จอง</p>
+            <p className="text-sm font-medium text-muted-foreground mb-2">{isConfirmed ? "ที่นั่งที่จอง" : "ที่นั่งในรายการ"}</p>
             <div className="grid grid-cols-3 gap-2">
               {booking.seats.map((seat, index) => {
                 const table = tablePositions.find((t) => String(t.id) === String(seat.tableId));
@@ -193,19 +216,22 @@ function TicketContent() {
             </div>
           )}
 
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p className="text-sm text-yellow-800">
-              <strong>หมายเหตุ:</strong> กรุณาบันทึกภาพ(Capture)ตั๋วนี้ไว้เป็นหลักฐานการจอง
-            </p>
-          </div>
+          {isConfirmed && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-sm text-yellow-800">
+                <strong>หมายเหตุ:</strong> กรุณาบันทึกภาพหน้าตั๋วนี้ไว้เป็นหลักฐานการจอง
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       <div className="flex gap-4">
-        {/* <Button onClick={handleDownloadTicket} variant="outline" className="flex-1">
-          <Download className="h-4 w-4 mr-2" />
-          ดาวน์โหลดตั๋ว
-        </Button> */}
+        {isPending && !paymentExpired && (
+          <Button onClick={handleContinuePayment} variant="outline" className="flex-1">
+            ไปชำระเงิน
+          </Button>
+        )}
         <Button onClick={handleNewBooking} className="flex-1">
           <Home className="h-4 w-4 mr-2" />
           จองใหม่
