@@ -56,6 +56,8 @@ export interface ZoneConfig {
   allowIndividualSeatBooking: boolean
   seatPrice: number // ราคาต่อที่นั่งเมื่อจองรายที่นั่ง
   tablePrice: number // ราคาต่อโต๊ะเมื่อจองทั้งโต๊ะ (9 ที่นั่ง)
+  gridRows?: number // ขนาดผังโต๊ะของโซน (API ใส่ค่าเริ่มต้น 10)
+  gridCols?: number
 }
 
 // เพิ่ม interface สำหรับตำแหน่งโต๊ะ
