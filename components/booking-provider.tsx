@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { useAuth } from "./auth-provider"
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
 import { apiBaseUrl as baseURL } from "@/lib/api"
+import { getNextTableName } from "@/lib/table-naming"
 
 // เพิ่ม axios interceptor เพื่อจัดการ errors
 axios.interceptors.response.use(
@@ -55,6 +56,9 @@ export interface ZoneConfig {
   allowIndividualSeatBooking: boolean
   seatPrice: number // ราคาต่อที่นั่งเมื่อจองรายที่นั่ง
   tablePrice: number // ราคาต่อโต๊ะเมื่อจองทั้งโต๊ะ (9 ที่นั่ง)
+  gridRows?: number // ขนาดผังโต๊ะของโซน (API ใส่ค่าเริ่มต้น 10)
+  gridCols?: number
+  color?: string
 }
 
 // เพิ่ม interface สำหรับตำแหน่งโต๊ะ
@@ -82,13 +86,14 @@ interface BookingContextType {
   updateBookingRecord: (id: string, updates: Partial<BookingRecord>) => Promise<BookingRecord>
   setBookingHistory: React.Dispatch<React.SetStateAction<BookingRecord[]>>;
   zoneConfigs: ZoneConfig[]
-  updateZoneConfig: (zoneId: string, updates: Partial<ZoneConfig>) => void
+  addZoneConfig: (zone: ZoneConfig) => void
+  updateZoneConfig: (zoneId: string, updates: Partial<ZoneConfig>) => Promise<ZoneConfig>
   removeZoneConfig: (zoneId: string) => void
   tablePositions: TablePosition[]
-  updateTablePosition: (tableId: number, x: number, y: number) => void
-  addTable: (zone: string, x: number, y: number) => void
-  removeTable: (tableId: number) => void
-  toggleTableActive: (tableId: number) => void
+  updateTablePosition: (tableId: number, x: number, y: number) => Promise<TablePosition>
+  addTable: (zone: string, x: number, y: number) => Promise<TablePosition>
+  removeTable: (tableId: number) => Promise<void>
+  toggleTableActive: (tableId: number) => Promise<TablePosition>
   markSeatsBooked: (seats: Array<{ tableId: number; seatNumber: number; zone: string }>) => void
   calculateTotalPrice: (selectedSeats: Seat[]) => number
   calculateDetailedPrice: (selectedSeats: Array<{ tableId: number; seatNumber: number }>) => {
@@ -153,6 +158,11 @@ export function BookingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const fetchData = async () => {
       if (authLoading) return;
+      if (["/login", "/register", "/forgot-password"].includes(pathname)) {
+        setIsLoading(false);
+        setError(null);
+        return;
+      }
       setIsLoading(true);
       setError(null);
 
@@ -318,14 +328,24 @@ export function BookingProvider({ children }: { children: ReactNode }) {
   //   }
   // }, []);
 
+  const addZoneConfig = useCallback((zone: ZoneConfig) => {
+    setZoneConfigs((prev) => {
+      const existingIndex = prev.findIndex((item) => item.id === zone.id);
+      if (existingIndex === -1) return [...prev, zone];
+      return prev.map((item) => (item.id === zone.id ? zone : item));
+    });
+  }, []);
+
   const updateZoneConfig = useCallback(async (zoneId: string, updates: Partial<ZoneConfig>) => {
     try {
-      const response = await axios.put(`${baseURL}/api/zones/${zoneId}`, updates);
+      const response = await axios.put<ZoneConfig>(`${baseURL}/api/zones/${zoneId}`, updates);
       setZoneConfigs((prev) =>
         prev.map((zone) => (zone.id === zoneId ? response.data : zone))
       );
+      return response.data;
     } catch (error) {
       console.error("Error updating zone config:", error);
+      throw error;
     }
   }, []);
 
@@ -335,12 +355,14 @@ export function BookingProvider({ children }: { children: ReactNode }) {
 
   const updateTablePosition = useCallback(async (tableId: number, x: number, y: number) => {
     try {
-      const response = await axios.put(`${baseURL}/api/tables/${tableId}`, { x, y });
+      const response = await axios.put<TablePosition>(`${baseURL}/api/tables/${tableId}`, { x, y });
       setTablePositions((prev) =>
         prev.map((table) => (table.id === tableId ? response.data : table))
       );
+      return response.data;
     } catch (error) {
       console.error("Error updating table position:", error);
+      throw error;
     }
   }, []);
 
@@ -352,10 +374,8 @@ export function BookingProvider({ children }: { children: ReactNode }) {
       const maxId = allTables.length > 0 ? Math.max(...allTables.map((table: TablePosition) => table.id)) : 0;
       const newId = maxId + 1;
 
-      // นับจำนวนโต๊ะในโซนนี้เพื่อสร้าง name (เช่น B1, B2)
-      const zoneTables = allTables.filter((table: TablePosition) => table.zone === zone);
-      const tableCountInZone = zoneTables.length + 1;
-      const newName = `${zone}${tableCountInZone}`; // เช่น B1, B2
+      // ใช้เลขว่างลำดับแรก เช่น เหลือ A1, A3 โต๊ะใหม่จะเป็น A2
+      const newName = getNextTableName(zone, allTables);
 
       // สร้าง payload สำหรับ API
       const newTable = {
@@ -366,13 +386,13 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         y,
       };
 
-      const createResponse = await axios.post(`${baseURL}/api/tables`, newTable);
+      const createResponse = await axios.post<TablePosition>(`${baseURL}/api/tables`, newTable);
       setTablePositions((prev) => [...prev, createResponse.data]);
 
       return createResponse.data; // ส่งคืนโต๊ะที่สร้างใหม่
     } catch (error) {
       console.error("Error adding table:", error);
-      throw (error instanceof Error ? error.message : "Failed to add table");
+      throw error;
     }
   }, []);
 
@@ -388,12 +408,14 @@ export function BookingProvider({ children }: { children: ReactNode }) {
 
   const toggleTableActive = useCallback(async (tableId: number) => {
     try {
-      const response = await axios.put(`${baseURL}/api/tables/${tableId}/toggle-active`);
+      const response = await axios.put<TablePosition>(`${baseURL}/api/tables/${tableId}/toggle-active`);
       setTablePositions((prev) =>
         prev.map((table) => (table.id === tableId ? response.data : table))
       );
+      return response.data;
     } catch (error) {
       console.error("Error toggling table active status:", error);
+      throw error;
     }
   }, []);
 
@@ -552,6 +574,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         updateBookingRecord,
         setBookingHistory,
         zoneConfigs,
+        addZoneConfig,
         updateZoneConfig,
         removeZoneConfig,
         tablePositions,

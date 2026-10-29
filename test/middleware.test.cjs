@@ -40,6 +40,10 @@ test('dashboard middleware admits admins and rejects other sessions before rende
     assert.equal(expired.headers.get('location'), 'http://localhost:3000/login?redirect=%2Fpsmnlp-dashboard')
     assert.match(expired.headers.get('set-cookie') || '', /auth_token=;/)
 
+    const expiredForgotPassword = await middleware(requestFor('/forgot-password'))
+    assert.equal(expiredForgotPassword.status, 200)
+    assert.match(expiredForgotPassword.headers.get('set-cookie') || '', /auth_token=;/)
+
     global.fetch = async () => { throw new Error('API unavailable') }
     const unavailable = await middleware(requestFor('/psmnlp-dashboard'))
     assert.equal(unavailable.status, 503)
@@ -47,6 +51,7 @@ test('dashboard middleware admits admins and rejects other sessions before rende
     const anonymous = await middleware(requestFor('/psmnlp-dashboard', false))
     assert.equal(anonymous.status, 307)
     assert.equal(anonymous.headers.get('location'), 'http://localhost:3000/login?redirect=%2Fpsmnlp-dashboard')
+    assert.equal((await middleware(requestFor('/forgot-password', false))).status, 200)
   } finally {
     global.fetch = originalFetch
   }

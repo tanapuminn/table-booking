@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { LayoutDashboard, LogOut, User } from "lucide-react"
 import Image from "next/image"
 import { apiBaseUrl as baseURL } from "@/lib/api"
+import { ADMIN_SHELL_PATH } from "@/components/app-main"
 
 const AUTH_PATHS = ["/login", "/register"]
 
@@ -41,7 +42,7 @@ export function Header() {
     return () => window.removeEventListener("site-settings-updated", loadSettings)
   }, [])
 
-  if (AUTH_PATHS.some((p) => pathname.startsWith(p))) {
+  if (AUTH_PATHS.some((p) => pathname.startsWith(p)) || pathname.startsWith(ADMIN_SHELL_PATH)) {
     return null
   }
 

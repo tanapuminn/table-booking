@@ -7,6 +7,15 @@ import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useBooking, type TablePosition, type ZoneConfig } from "./booking-provider"
 import { cn } from "@/lib/utils"
+import { getZoneColor } from "@/lib/zone-colors"
+import {
+  TABLE_LAYOUT_CELL_HEIGHT,
+  TABLE_LAYOUT_CELL_WIDTH,
+  TABLE_LAYOUT_PADDING_X,
+  TABLE_LAYOUT_STAGE_HEIGHT,
+  getCombinedGrid,
+  getTableLayoutDimensions,
+} from "@/lib/table-layout"
 
 type Seat = { id: string; tableId: number; seatNumber: number; isBooked: boolean; studentName: string; classLevel: string }
 type Mode = "seats" | "table"
@@ -112,10 +121,8 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
     .map((table) => ({ table, seats: selectedSeats.filter((seat) => seat.tableId === table.id) })),
   [tablePositions, selectedSeats])
 
-  const maxX = Math.max(9, ...visibleTables.map((table) => table.x))
-  const maxY = Math.max(6, ...visibleTables.map((table) => table.y))
-  const mapWidth = Math.max(820, (maxX + 1) * 78 + 48)
-  const mapHeight = Math.max(510, (maxY + 1) * 72 + 40)
+  const customerGrid = getCombinedGrid(activeZones, visibleTables)
+  const { width: mapWidth, height: mapHeight } = getTableLayoutDimensions(customerGrid)
 
   const openTable = (table: TablePosition) => {
     const zone = zoneConfigs.find((item) => item.id === table.zone)
@@ -212,8 +219,8 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
         {activeZones.length > 0 && (
           <div className="mt-5 flex flex-wrap gap-2 text-xs text-slate-600 sm:text-sm">
             {activeZones.map((zone) => (
-              <span key={zone.id} className="rounded-full bg-pink-50 px-3 py-1.5">
-                <strong className="text-primary">{zoneName(zone)}</strong>
+              <span key={zone.id} className="rounded-full px-3 py-1.5" style={{ backgroundColor: `${getZoneColor(zone.id, zoneConfigs)}14` }}>
+                <strong style={{ color: getZoneColor(zone.id, zoneConfigs) }}>{zoneName(zone)}</strong>
                 <span className="ml-1">· {individualAllowed(zone) ? "เลือกที่นั่งได้" : "จองทั้งโต๊ะ"}</span>
               </span>
             ))}
@@ -233,9 +240,9 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
           <div className="mt-6 flex min-h-[300px] items-center justify-center text-center text-slate-600">ยังไม่มีโต๊ะที่เปิดให้จอง</div>
         ) : (
           <div className="mt-6 overflow-x-auto rounded-xl bg-[#fdf9fc]" aria-label="แผนผังโต๊ะ เลื่อนแนวนอนได้บนหน้าจอขนาดเล็ก">
-            <div className="relative mx-auto p-5" style={{ width: mapWidth, height: mapHeight + 102 }}>
-              <div className="absolute left-8 right-8 top-5 rounded-b-[64px] bg-pink-100 py-4 text-center text-xl font-bold text-primary">เวที</div>
-              <div className="absolute inset-x-0 bottom-0 top-[102px]">
+            <div className="relative mx-auto" style={{ width: mapWidth, height: mapHeight + TABLE_LAYOUT_STAGE_HEIGHT }}>
+              <div className="absolute top-5 rounded-b-[64px] bg-pink-100 py-4 text-center text-xl font-bold text-primary" style={{ left: TABLE_LAYOUT_PADDING_X, right: TABLE_LAYOUT_PADDING_X }}>เวที</div>
+              <div className="absolute inset-x-0 bottom-0" style={{ top: TABLE_LAYOUT_STAGE_HEIGHT }}>
                 {visibleTables.map((table) => {
                   const zone = zoneConfigs.find((item) => item.id === table.zone)
                   const available = table.seats.filter((seat) => !seat.isBooked).length
@@ -254,7 +261,11 @@ export function TableMap({ onConfirmSelection }: { onConfirmSelection?: () => vo
                           : selected ? "border-primary bg-primary text-white"
                           : "border-slate-300 bg-white text-slate-800 hover:border-primary hover:bg-pink-50",
                       )}
-                      style={{ left: table.x * 78 + 20, top: table.y * 72 + 12 }}
+                      style={{
+                        left: table.x * TABLE_LAYOUT_CELL_WIDTH + 20,
+                        top: table.y * TABLE_LAYOUT_CELL_HEIGHT + 12,
+                        borderColor: !unavailable && !selected ? getZoneColor(table.zone, zoneConfigs) : undefined,
+                      }}
                     >
                       <span className="font-bold">{table.name}</span>
                       <span className="text-[10px]">{unavailable ? "เต็ม" : individualAllowed(zone) ? "ว่าง " + available : "ทั้งโต๊ะ"}</span>

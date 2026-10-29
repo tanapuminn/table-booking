@@ -1,38 +1,50 @@
-# Booking UI design QA
+# Design QA
 
-- Source visual truth: `design/booking-seat-picker-reference.png` (1487 × 1058 px; desktop concept).
-- Browser rendering: `design/booking-seat-picker-rendered.png` (893 × 884 px; 893 × 884 CSS viewport, device scale 1).
-- Compared state: ordinary-zone table B4, seats 1–3 selected, seats 6–7 booked, seat price 300 baht, total 900 baht.
-- Normalization: the source and rendered seat drawers are both about 570 CSS px wide. The full-page frames differ because the browser viewport is narrower than the concept; the rendered page correctly stacks the summary below the map.
+- Source visual truth: `C:\Users\Admin\.codex\generated_images\01a185c7-ee7d-7883-ad2a-11557da872be\exec-34a39846-e95b-459b-9d8f-7912e283fc31.png`
+- Customer-layout reference: `C:\Users\Admin\AppData\Local\Temp\codex-clipboard-e936e96e-58da-4347-8afa-aac1d5268094.png`
+- Intended viewport: 1440 × 1024 CSS px at device scale factor 1
+- State: admin layout editor, edit mode, all zones visible
+- Implementation screenshot: unavailable
 
-## Findings
+**Findings**
 
-No actionable P0/P1/P2 differences remain in the seat-selection flow. The rendered drawer keeps the same school mark, magenta action hierarchy, round nine-seat table, selected/available/booked colors, mode control, price and confirmation action. The real seat controls are simpler than the illustrative chair drawings so each number remains a clear tap target; this is an intentional functional simplification.
+- [P1] Browser-rendered comparison is unavailable
+  - Location: `/psmnlp-dashboard?section=layout`
+  - Evidence: the production build and TypeScript checks pass, but the browser-control session could not access the newly started local development port. The existing port was serving a stale Next.js process after its `.next` output changed.
+  - Impact: typography, spacing, responsive overflow, and visual fidelity cannot be approved from source code alone.
+  - Fix: open the running application in a browser session that can reach the local development server, capture edit and Preview states at 1440 × 1024, and compare them with the two source images.
 
-## Fidelity checks
+**Required Fidelity Surfaces**
 
-- Typography: Thai labels and prices remain readable; the app uses local system Thai fallbacks so production builds do not depend on downloading a font.
-- Layout and spacing: the 570 px drawer fits all nine controls and keeps the total and action visible at the bottom. The narrower browser view uses the responsive stacked map and summary.
-- Colors: the primary token now uses the school magenta. White, pink and slate states distinguish available, selected and booked seats.
-- Image quality: the actual school logo is used in the header. The interactive seat diagram uses native controls to keep hit targets and state changes precise.
-- Copy: each zone explains seat or whole-table choice according to its `allowIndividualSeatBooking` setting.
+- Fonts and typography: not visually verified; implementation uses the existing Segoe UI / Noto Sans Thai stack.
+- Spacing and layout rhythm: not visually verified; responsive three-column edit layout and two-column Preview layout are implemented.
+- Colors and visual tokens: not visually verified; implementation uses the existing primary and semantic tokens plus restrained zone accent colors.
+- Image quality and asset fidelity: no raster assets are required by this screen; the stage, tables, controls, and status indicators are native UI elements.
+- Copy and content: statically reviewed. Labels distinguish edit mode, customer Preview, global grid size, zone settings, and table settings.
 
-## Interaction evidence
+**Interaction Checks Completed Without Browser Mutation**
 
-- Selected three available B4 seats: total updated to 900 baht and the summary and buyer form showed seats 1, 2 and 3.
-- B4 had two booked seats: whole-table option was disabled.
-- A3 with individual booking disabled in the QA fixture: all nine seats were grouped, individual selection was disabled, and the 2,500 baht table price appeared.
-- Fully available B5: switching to whole-table mode selected nine seats and displayed its 2,400 baht table price.
-- The live API has individual booking enabled for zone A. The implementation follows that value, so A can also be sold by seat until an administrator changes the setting.
-- The initial unauthenticated mock request returned an expected 401. Google sign-in reported that localhost is not an allowed origin for its configured client ID. Neither affected the tested authenticated booking flow.
+- TypeScript: passed.
+- Production build: passed.
+- Table-layout unit tests: 4 passed.
+- Global-grid shrink validation: implemented for tables from every zone.
+- Global collision validation: implemented across every zone.
+- Legacy `?section=zones` URL: redirects internally to the combined layout section.
 
-## Comparison history
+**Open Questions**
 
-- First browser pass: hovering an already selected seat temporarily changed it to the available hover color; the drawer backdrop was darker than the concept.
-- Fix: apply hover styling only to unselected seats and reduce the backdrop opacity. The later browser capture above shows all three selected seats in magenta and the map visible behind the drawer.
+- None about the requested behavior. Visual browser access remains the only blocker.
 
-## Follow-up polish
+**Implementation Checklist**
 
-- At a 1440 px viewport, compare the complete two-column map and summary against the desktop concept. The in-app browser available for this QA pass was 893 px wide.
+1. Capture the editor at 1440 × 1024.
+2. Verify zone list, unified map, and inspector fit without clipped controls.
+3. Switch to Preview and compare table positions against the customer page.
+4. Test the global grid dialog and one non-destructive table selection.
+5. Check browser console errors and repeat comparison after any visual fixes.
 
-Final result: passed
+**Comparison History**
+
+- Initial pass: blocked before visual comparison because no browser-rendered implementation screenshot could be captured.
+
+final result: blocked
