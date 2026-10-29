@@ -24,41 +24,91 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  BarChart2, BookOpen, LayoutGrid, MapPin, Edit, Trash2, Eye, ScanLine,
-  Search, Settings, Home, Plus, Ticket,
+  LayoutDashboard, BookOpen, LayoutGrid, MapPin, Trash2, ScanLine,
+  Settings, Plus, LogOut, ExternalLink,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useBooking, type BookingRecord } from "@/components/booking-provider";
+import { useBooking, type ZoneConfig } from "@/components/booking-provider";
 import { TableLayoutEditor } from "@/components/table-layout-editor";
-import { BookingStats } from "@/components/booking-stats";
+import { DashboardOverview } from "@/components/dashboard-overview";
+import { DashboardBookings } from "@/components/dashboard-bookings";
 import { DashboardCheckInMap } from "@/components/dashboard-checkin-map";
+import { StatCard } from "@/components/stat-card";
+import { buttonVariants } from "@/components/ui/button";
 import { useLoadingRouter } from "@/components/navigation-loading";
 import axios from "axios";
-import dayjs from "dayjs";
 import { cn } from "@/lib/utils";
 import { apiBaseUrl as baseURL } from "@/lib/api";
+import { type BookingStatus } from "@/lib/booking-status";
+import { getZoneOccupancy } from "@/lib/dashboard-metrics";
 
-type Section = "stats" | "bookings" | "checkin" | "zones" | "layout" | "settings";
+type Section = "overview" | "bookings" | "checkin" | "zones" | "layout" | "settings";
 
-const NAV_ITEMS: { id: Section; label: string; icon: React.ElementType }[] = [
-  { id: "stats", label: "\u0e2a\u0e16\u0e34\u0e15\u0e34\u0e01\u0e32\u0e23\u0e08\u0e2d\u0e07", icon: BarChart2 },
-  { id: "bookings", label: "\u0e08\u0e31\u0e14\u0e01\u0e32\u0e23\u0e01\u0e32\u0e23\u0e08\u0e2d\u0e07", icon: BookOpen },
-  { id: "checkin", label: "\u0e1c\u0e31\u0e07\u0e40\u0e0a\u0e47\u0e01\u0e2d\u0e34\u0e19\u0e2b\u0e19\u0e49\u0e32\u0e07\u0e32\u0e19", icon: ScanLine },
-  { id: "zones", label: "\u0e08\u0e31\u0e14\u0e01\u0e32\u0e23\u0e42\u0e0b\u0e19", icon: MapPin },
-  { id: "layout", label: "\u0e1c\u0e31\u0e07\u0e17\u0e35\u0e48\u0e19\u0e31\u0e48\u0e07", icon: LayoutGrid },
-  { id: "settings", label: "\u0e15\u0e31\u0e49\u0e07\u0e04\u0e48\u0e32\u0e40\u0e27\u0e47\u0e1a", icon: Settings },
+const NAV_ITEMS: { id: Section; label: string; description: string; icon: React.ElementType }[] = [
+  { id: "overview", label: "\u0e20\u0e32\u0e1e\u0e23\u0e27\u0e21", description: "\u0e22\u0e2d\u0e14\u0e08\u0e2d\u0e07 \u0e17\u0e35\u0e48\u0e19\u0e31\u0e48\u0e07 \u0e41\u0e25\u0e30\u0e2a\u0e34\u0e48\u0e07\u0e17\u0e35\u0e48\u0e15\u0e49\u0e2d\u0e07\u0e15\u0e34\u0e14\u0e15\u0e32\u0e21", icon: LayoutDashboard },
+  { id: "bookings", label: "\u0e01\u0e32\u0e23\u0e08\u0e2d\u0e07", description: "\u0e04\u0e49\u0e19\u0e2b\u0e32 \u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a \u0e41\u0e25\u0e30\u0e08\u0e31\u0e14\u0e01\u0e32\u0e23\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e08\u0e2d\u0e07", icon: BookOpen },
+  { id: "checkin", label: "\u0e40\u0e0a\u0e47\u0e01\u0e2d\u0e34\u0e19\u0e2b\u0e19\u0e49\u0e32\u0e07\u0e32\u0e19", description: "\u0e15\u0e23\u0e27\u0e08\u0e23\u0e32\u0e22\u0e0a\u0e37\u0e48\u0e2d\u0e41\u0e25\u0e30\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e01\u0e32\u0e23\u0e21\u0e32\u0e16\u0e36\u0e07\u0e15\u0e32\u0e21\u0e17\u0e35\u0e48\u0e19\u0e31\u0e48\u0e07", icon: ScanLine },
+  { id: "zones", label: "\u0e42\u0e0b\u0e19\u0e41\u0e25\u0e30\u0e23\u0e32\u0e04\u0e32", description: "\u0e40\u0e1b\u0e34\u0e14/\u0e1b\u0e34\u0e14\u0e42\u0e0b\u0e19 \u0e41\u0e25\u0e30\u0e01\u0e33\u0e2b\u0e19\u0e14\u0e23\u0e32\u0e04\u0e32\u0e17\u0e35\u0e48\u0e19\u0e31\u0e48\u0e07\u0e2b\u0e23\u0e37\u0e2d\u0e17\u0e31\u0e49\u0e07\u0e42\u0e15\u0e4a\u0e30", icon: MapPin },
+  { id: "layout", label: "\u0e1c\u0e31\u0e07\u0e42\u0e15\u0e4a\u0e30", description: "\u0e08\u0e31\u0e14\u0e15\u0e33\u0e41\u0e2b\u0e19\u0e48\u0e07\u0e42\u0e15\u0e4a\u0e30\u0e43\u0e19\u0e41\u0e15\u0e48\u0e25\u0e30\u0e42\u0e0b\u0e19", icon: LayoutGrid },
+  { id: "settings", label: "\u0e15\u0e31\u0e49\u0e07\u0e04\u0e48\u0e32", description: "\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e42\u0e04\u0e23\u0e07\u0e01\u0e32\u0e23 \u0e01\u0e32\u0e23\u0e23\u0e31\u0e1a\u0e08\u0e2d\u0e07 \u0e41\u0e25\u0e30\u0e0a\u0e48\u0e2d\u0e07\u0e17\u0e32\u0e07\u0e0a\u0e33\u0e23\u0e30\u0e40\u0e07\u0e34\u0e19", icon: Settings },
 ];
+const DEFAULT_SECTION: Section = "overview";
+
+// \u0e40\u0e01\u0e47\u0e1a\u0e40\u0e21\u0e19\u0e39\u0e17\u0e35\u0e48\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e44\u0e27\u0e49\u0e43\u0e19 ?section= \u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e43\u0e2b\u0e49 refresh, \u0e1b\u0e38\u0e48\u0e21 back \u0e41\u0e25\u0e30\u0e01\u0e32\u0e23\u0e41\u0e0a\u0e23\u0e4c\u0e25\u0e34\u0e07\u0e01\u0e4c\u0e01\u0e25\u0e31\u0e1a\u0e21\u0e32\u0e17\u0e35\u0e48\u0e2b\u0e19\u0e49\u0e32\u0e40\u0e14\u0e34\u0e21
+const readSectionFromUrl = (): Section => {
+  const value = new URLSearchParams(window.location.search).get("section");
+  return NAV_ITEMS.some((item) => item.id === value) ? (value as Section) : DEFAULT_SECTION;
+};
+
+function ZonePriceInput({ value, disabled, onSave }: { value: number; disabled: boolean; onSave: (value: number) => Promise<void> }) {
+  const [draft, setDraft] = useState(String(value));
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => setDraft(String(value)), [value]);
+
+  const commit = async () => {
+    const nextValue = Number(draft);
+    if (!Number.isFinite(nextValue) || nextValue < 0) {
+      setDraft(String(value));
+      return;
+    }
+    if (nextValue === value) return;
+
+    setIsSaving(true);
+    try {
+      await onSave(nextValue);
+    } catch {
+      setDraft(String(value));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Input
+      type="number"
+      min="0"
+      value={draft}
+      className="text-right"
+      disabled={disabled || isSaving}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => void commit()}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+        if (event.key === "Escape") setDraft(String(value));
+      }}
+    />
+  );
+}
 
 export default function DashboardPage() {
   const { toast } = useToast();
   const router = useLoadingRouter();
-  const { user, isLoading: authLoading } = useAuth();
-  const { bookingHistory, updateBookingRecord, zoneConfigs, updateZoneConfig, removeZoneConfig, setBookingHistory } = useBooking();
+  const { user, isLoading: authLoading, logout } = useAuth();
+  const { bookingHistory, zoneConfigs, addZoneConfig, updateZoneConfig, removeZoneConfig, tablePositions } = useBooking();
 
-  const [activeSection, setActiveSection] = useState<Section>("stats");
+  const [activeSection, setActiveSection] = useState<Section>(DEFAULT_SECTION);
   const [searchTerm, setSearchTerm] = useState("");
-  const [bookingPage, setBookingPage] = useState(1);
-  const [editingBooking, setEditingBooking] = useState<BookingRecord | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [isAddZoneOpen, setIsAddZoneOpen] = useState(false);
   const [newZone, setNewZone] = useState({
@@ -86,10 +136,36 @@ export default function DashboardPage() {
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isUpdatingBookingStatus, setIsUpdatingBookingStatus] = useState(false);
   const [isSavingPaymentTimeout, setIsSavingPaymentTimeout] = useState(false);
-  const [isExportingBookings, setIsExportingBookings] = useState(false);
   useEffect(() => {
     if (!authLoading && user?.role !== "admin") router.replace("/");
   }, [user, authLoading, router]);
+
+  useEffect(() => {
+    const syncSection = () => setActiveSection(readSectionFromUrl());
+    syncSection();
+    window.addEventListener("popstate", syncSection);
+    return () => window.removeEventListener("popstate", syncSection);
+  }, []);
+
+  const navigateTo = (section: Section) => {
+    setActiveSection(section);
+    const url = new URL(window.location.href);
+    if (section === DEFAULT_SECTION) url.searchParams.delete("section");
+    else url.searchParams.set("section", section);
+    if (url.href !== window.location.href) window.history.pushState(null, "", url);
+    window.scrollTo({ top: 0 });
+  };
+
+  const openBookings = (status: BookingStatus | "all" = "all") => {
+    setSearchTerm("");
+    setStatusFilter(status);
+    navigateTo("bookings");
+  };
+
+  const handleLogout = () => {
+    logout();
+    router.push("/login");
+  };
   const loadSiteSettings = () => {
     setIsLoadingSettings(true);
     axios
@@ -116,125 +192,32 @@ export default function DashboardPage() {
     loadSiteSettings();
   }, []);
 
-  const filteredBookings = bookingHistory.filter((booking) => {
-    const matchesSearch =
-      booking.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.phone.includes(searchTerm) ||
-      booking.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "all" || booking.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-  const bookingPageSize = 5;
-  const bookingPageCount = Math.max(1, Math.ceil(filteredBookings.length / bookingPageSize));
-  const bookingPageStart = (bookingPage - 1) * bookingPageSize;
-  const visibleBookings = filteredBookings.slice(bookingPageStart, bookingPageStart + bookingPageSize);
-
-  useEffect(() => {
-    setBookingPage(1);
-  }, [searchTerm, statusFilter]);
-
-  useEffect(() => {
-    if (bookingPage > bookingPageCount) setBookingPage(bookingPageCount);
-  }, [bookingPage, bookingPageCount]);
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "confirmed": return "bg-green-100 text-green-800";
-      case "cancelled": return "bg-red-100 text-red-800";
-      case "pending_payment": return "bg-yellow-100 text-yellow-800";
-      case "payment_timeout": return "bg-orange-100 text-orange-800";
-      case "pending": return "bg-blue-100 text-blue-800";
-      default: return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "confirmed": return "ยืนยันแล้ว";
-      case "cancelled": return "ยกเลิกแล้ว";
-      case "pending_payment": return "รอชำระเงิน";
-      case "payment_timeout": return "หมดเวลาชำระ";
-      case "pending": return "รอดำเนินการ";
-      default: return status;
-    }
-  };
-
-  const handleChangeStatus = async (bookingId: string, newStatus: "pending" | "confirmed" | "cancelled") => {
+  const handleZoneToggle = async (zoneId: string, isActive: boolean) => {
     try {
-      if (newStatus !== "confirmed") {
-        const ok = window.confirm("คุณแน่ใจหรือไม่ว่าต้องการยกเลิกการจองนี้?");
-        if (!ok) return;
-      }
-      await axios.patch(`${baseURL}/api/bookings/${bookingId}`, { status: newStatus });
-      setBookingHistory((prev) =>
-        prev.map((b) => (b.id === bookingId ? { ...b, status: newStatus } : b))
-      );
-      toast({ title: "เปลี่ยนสถานะการจองสำเร็จ", description: `${bookingId} → "${getStatusText(newStatus)}"` });
+      await updateZoneConfig(zoneId, { isActive });
+      toast({ title: `${isActive ? "เปิด" : "ปิด"}โซน ${zoneId} สำเร็จ` });
+    } catch {
+      toast({ title: "เปลี่ยนสถานะโซนไม่สำเร็จ", description: "กรุณาลองอีกครั้ง", variant: "destructive" });
+    }
+  };
+
+  const handleIndividualSeatBookingToggle = async (zoneId: string, allow: boolean) => {
+    try {
+      await updateZoneConfig(zoneId, { allowIndividualSeatBooking: allow });
+      toast({ title: `${allow ? "เปิด" : "ปิด"}การจองรายที่นั่งในโซน ${zoneId}` });
+    } catch {
+      toast({ title: "เปลี่ยนการจองรายที่นั่งไม่สำเร็จ", description: "กรุณาลองอีกครั้ง", variant: "destructive" });
+    }
+  };
+
+  const handlePriceChange = async (zoneId: string, type: "seatPrice" | "tablePrice", value: number) => {
+    try {
+      await updateZoneConfig(zoneId, { [type]: value });
+      toast({ title: "อัปเดตราคาสำเร็จ" });
     } catch (error) {
-      toast({ title: "ข้อผิดพลาด", description: `ไม่สามารถเปลี่ยนสถานะได้`, variant: "destructive" });
+      toast({ title: "อัปเดตราคาไม่สำเร็จ", description: "กรุณาลองอีกครั้ง", variant: "destructive" });
+      throw error;
     }
-  };
-
-  const handleEditBooking = async (updates: Partial<BookingRecord>) => {
-    if (!editingBooking) return;
-    try {
-      await updateBookingRecord(editingBooking.id, updates);
-      toast({ title: "แก้ไขข้อมูลสำเร็จ", description: `การจอง ${editingBooking.id} อัปเดตแล้ว` });
-      setEditingBooking(null);
-    } catch {
-      toast({ title: "แก้ไขข้อมูลไม่สำเร็จ", variant: "destructive" });
-    }
-  };
-
-  const handleDeleteBooking = async (bookingId: string) => {
-    if (!window.confirm("คุณแน่ใจหรือไม่ว่าต้องการลบการจองนี้?")) return;
-    try {
-      await axios.delete(`${baseURL}/api/bookings/${bookingId}`);
-      setBookingHistory((prev) => prev.filter((b) => b.id !== bookingId));
-      toast({ title: "ลบการจองเรียบร้อยแล้ว" });
-    } catch {
-      toast({ title: "เกิดข้อผิดพลาด", description: "ไม่สามารถลบการจองได้", variant: "destructive" });
-    }
-  };
-
-  const handleExportBookings = async () => {
-    setIsExportingBookings(true);
-    try {
-      const response = await axios.get<Blob>(`${baseURL}/api/bookings/export/xlsx`, { responseType: "blob" });
-      const contentType = String(response.headers["content-type"] || "");
-      if (!contentType.includes("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) {
-        throw new Error("Unexpected export response");
-      }
-      const filename = /filename="?([^";]+)"?/i.exec(String(response.headers["content-disposition"] || ""))?.[1] || "booking_report.xlsx";
-      const url = URL.createObjectURL(response.data);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 0);
-    } catch {
-      toast({ title: "ส่งออก Excel ไม่สำเร็จ", description: "กรุณาลองใหม่อีกครั้ง", variant: "destructive" });
-    } finally {
-      setIsExportingBookings(false);
-    }
-  };
-
-  const handleZoneToggle = (zoneId: string, isActive: boolean) => {
-    updateZoneConfig(zoneId, { isActive });
-    toast({ title: `${isActive ? "เปิด" : "ปิด"}โซน ${zoneId} สำเร็จ` });
-  };
-
-  const handleIndividualSeatBookingToggle = (zoneId: string, allow: boolean) => {
-    updateZoneConfig(zoneId, { allowIndividualSeatBooking: allow });
-    toast({ title: `${allow ? "เปิด" : "ปิด"}การจองรายที่นั่งในโซน ${zoneId}` });
-  };
-
-  const handlePriceChange = (zoneId: string, type: "seatPrice" | "tablePrice", value: number) => {
-    if (value < 0) return;
-    updateZoneConfig(zoneId, { [type]: value });
-    toast({ title: "อัพเดทราคาสำเร็จ" });
   };
 
   const handleAddZone = async () => {
@@ -243,8 +226,8 @@ export default function DashboardPage() {
       return;
     }
     try {
-      await axios.post(`${baseURL}/api/zones`, { ...newZone });
-      updateZoneConfig(newZone.id, { ...newZone, isActive: true });
+      const { data: createdZone } = await axios.post<ZoneConfig>(`${baseURL}/api/zones`, { ...newZone });
+      addZoneConfig(createdZone);
       setNewZone({ id: "", name: "", description: "", allowIndividualSeatBooking: true, seatPrice: 0, tablePrice: 0 });
       setIsAddZoneOpen(false);
       toast({ title: "เพิ่มโซนสำเร็จ", description: `โซน ${newZone.id} - ${newZone.name}` });
@@ -353,14 +336,12 @@ export default function DashboardPage() {
     reader.onload = () => setBankImagePreview(String(reader.result || ""));
     reader.readAsDataURL(file);
   };
-  const getZoneStats = () => {
-    const stats: Record<string, number> = zoneConfigs.reduce((acc, z) => ({ ...acc, [z.id]: 0 }), {});
-    bookingHistory
-      .filter((b) => b.status === "confirmed")
-      .forEach((b) => b.seats.forEach((s) => { if (s.zone && stats.hasOwnProperty(s.zone)) stats[s.zone]++; }));
-    return stats;
-  };
-  const zoneStats = getZoneStats();
+  const zoneOccupancy = getZoneOccupancy(zoneConfigs, tablePositions, bookingHistory);
+  const zoneStats: Record<string, number> = Object.fromEntries(zoneOccupancy.map((item) => [item.zone.id, item.confirmedSeats]));
+  const openSeatCapacity = zoneOccupancy.filter((item) => item.zone.isActive).reduce((sum, item) => sum + item.capacity, 0);
+  const pendingPaymentCount = bookingHistory.filter((booking) => booking.status === "pending_payment").length;
+  const activeNavItem = NAV_ITEMS.find((item) => item.id === activeSection) ?? NAV_ITEMS[0];
+  const eventName = siteSettings.projectSubtitle || siteSettings.projectTitle;
 
   const SettingsSection = () => (
     <Card>
@@ -411,7 +392,7 @@ export default function DashboardPage() {
                   <Label htmlFor="project-subtitle">{"\u0e0a\u0e37\u0e48\u0e2d\u0e42\u0e04\u0e23\u0e07\u0e01\u0e32\u0e23 / \u0e1a\u0e23\u0e23\u0e17\u0e31\u0e14\u0e17\u0e35\u0e48\u0e2a\u0e2d\u0e07"}</Label>
                   <Input id="project-subtitle" value={siteSettings.projectSubtitle} onChange={(e) => setSiteSettings((prev) => ({ ...prev, projectSubtitle: e.target.value }))} />
                 </div>
-                <p className="text-sm text-red-500">{"\u0e15\u0e31\u0e27\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e0a\u0e37\u0e48\u0e2d\u0e42\u0e04\u0e23\u0e07\u0e01\u0e32\u0e23\u0e17\u0e35\u0e48\u0e08\u0e30\u0e41\u0e2a\u0e14\u0e07\u0e43\u0e19\u0e17\u0e38\u0e01\u0e2b\u0e19\u0e49\u0e32\u0e08\u0e2d"}</p>
+                <p className="text-sm text-muted-foreground">{"\u0e15\u0e31\u0e27\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e0a\u0e37\u0e48\u0e2d\u0e42\u0e04\u0e23\u0e07\u0e01\u0e32\u0e23\u0e17\u0e35\u0e48\u0e08\u0e30\u0e41\u0e2a\u0e14\u0e07\u0e43\u0e19\u0e17\u0e38\u0e01\u0e2b\u0e19\u0e49\u0e32\u0e08\u0e2d"}</p>
                 <div className="rounded-md border bg-muted/30 p-4 text-center">
                   {siteSettings.projectTitle && <p className="text-2xl font-bold leading-tight">{siteSettings.projectTitle}</p>}
                   {siteSettings.projectSubtitle && <p className="text-2xl font-bold leading-tight">{siteSettings.projectSubtitle}</p>}
@@ -489,183 +470,47 @@ export default function DashboardPage() {
       </CardContent>
     </Card>
   );
-  // Sidebar nav item
-  const SidebarItem = ({ item }: { item: typeof NAV_ITEMS[number] }) => (
+  // เรียกเป็นฟังก์ชัน ไม่ใช่ <Component /> เพื่อไม่ให้ React สร้าง element ใหม่ทุกครั้งที่ state เปลี่ยน
+  const renderNavItem = (item: typeof NAV_ITEMS[number], compact = false) => {
+    const isActive = activeSection === item.id;
+    const showBadge = item.id === "bookings" && pendingPaymentCount > 0;
+    return (
+      <button
+        key={item.id}
+        type="button"
+        onClick={() => navigateTo(item.id)}
+        aria-current={isActive ? "page" : undefined}
+        className={cn(
+          "flex items-center rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          compact ? "shrink-0 gap-1.5 whitespace-nowrap px-3 py-1.5 text-xs" : "w-full gap-3 px-3 py-2 text-left text-sm",
+          isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+        )}
+      >
+        <item.icon className={cn("shrink-0", compact ? "h-3.5 w-3.5" : "h-4 w-4")} aria-hidden="true" />
+        <span>{item.label}</span>
+        {showBadge && (
+          <span className="ml-auto rounded-full bg-warning/15 px-1.5 text-[11px] font-semibold tabular-nums text-warning" aria-label={`รอชำระเงิน ${pendingPaymentCount} รายการ`}>
+            {pendingPaymentCount}
+          </span>
+        )}
+      </button>
+    );
+  };
+
+  const bookingStatusPill = isLoadingSettings ? (
+    <span className="inline-block h-5 w-24 animate-pulse rounded-full bg-muted" />
+  ) : (
     <button
-      onClick={() => setActiveSection(item.id)}
+      type="button"
+      onClick={() => navigateTo("settings")}
       className={cn(
-        "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left",
-        activeSection === item.id
-          ? "bg-primary text-primary-foreground"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        siteSettings.bookingEnabled ? "border-success/20 bg-success/10 text-success" : "border-warning/20 bg-warning/10 text-warning"
       )}
     >
-      <item.icon className="h-4 w-4 shrink-0" />
-      <span>{item.label}</span>
-      {item.id === "bookings" && (
-        <Badge
-          variant={activeSection === "bookings" ? "secondary" : "outline"}
-          className="ml-auto text-xs px-1.5 py-0 h-4 min-w-[1.25rem] justify-center"
-        >
-          {bookingHistory.length}
-        </Badge>
-      )}
+      <span className={cn("h-1.5 w-1.5 rounded-full", siteSettings.bookingEnabled ? "bg-success" : "bg-warning")} aria-hidden="true" />
+      {siteSettings.bookingEnabled ? "เปิดรับจองอยู่" : "ปิดรับจอง"}
     </button>
-  );
-
-  // ─── Section: Bookings ─────────────────────────────────────────────────────
-  const BookingsSection = () => (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="ค้นหาชื่อ, เบอร์โทร, รหัสจอง..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-44">
-            <SelectValue placeholder="สถานะทั้งหมด" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">สถานะทั้งหมด</SelectItem>
-            <SelectItem value="confirmed">ยืนยันแล้ว</SelectItem>
-            <SelectItem value="pending_payment">รอชำระเงิน</SelectItem>
-            <SelectItem value="payment_timeout">หมดเวลาชำระ</SelectItem>
-            <SelectItem value="cancelled">ยกเลิกแล้ว</SelectItem>
-            <SelectItem value="pending">รอดำเนินการ</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button variant="secondary" onClick={handleExportBookings} disabled={isExportingBookings}>
-          {isExportingBookings ? "กำลังส่งออก..." : "📄 ส่งออก Excel"}
-        </Button>
-      </div>
-
-      <div className="grid gap-3">
-        {visibleBookings.map((booking) => (
-          <Card key={booking.id}>
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-start gap-2">
-                <div className="min-w-0">
-                  <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-                    <span className="truncate">{booking.customerName}</span>
-                    <Badge className={getStatusColor(booking.status)}>{getStatusText(booking.status)}</Badge>
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {booking.id} · {dayjs(booking.bookingDate).format("DD/MM/YYYY HH:mm")}
-                  </p>
-                </div>
-                <div className="flex gap-1 shrink-0">
-                  {booking.paymentProof && (
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" title="ดูสลิป"><Eye className="h-4 w-4" /></Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader><DialogTitle>หลักฐานการชำระเงิน</DialogTitle></DialogHeader>
-                        <Image src={booking.paymentProof} alt="Payment proof" width={800} height={600} unoptimized className="w-full rounded-lg mt-4" />
-                      </DialogContent>
-                    </Dialog>
-                  )}
-                  {booking.status === "confirmed" && (
-                    <Button variant="outline" size="sm" title="ดูตั๋ว" onClick={() => router.push(`/ticket?bookingId=${booking.id}`)}>
-                      <Ticket className="h-4 w-4" />
-                    </Button>
-                  )}
-                  <Dialog open={editingBooking?.id === booking.id} onOpenChange={(open) => setEditingBooking(open ? booking : null)}>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm" title="แก้ไข">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader><DialogTitle>แก้ไขข้อมูลการจอง</DialogTitle></DialogHeader>
-                      {editingBooking && (
-                        <EditBookingForm booking={editingBooking} onSave={handleEditBooking} onCancel={() => setEditingBooking(null)} />
-                      )}
-                    </DialogContent>
-                  </Dialog>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="outline" size="sm" title="เปลี่ยนสถานะ"><Settings className="h-4 w-4" /></Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>เปลี่ยนสถานะ · {booking.id}</AlertDialogTitle>
-                        <AlertDialogDescription>เลือกการดำเนินการสำหรับการจองนี้</AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter className="flex-wrap gap-2">
-                        <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-                        {booking.status === "pending_payment" && (
-                          <AlertDialogAction className="bg-green-600 hover:bg-green-500" onClick={() => handleChangeStatus(booking.id, "confirmed")}>
-                            ยืนยันการจอง
-                          </AlertDialogAction>
-                        )}
-                        {booking.status !== "confirmed" && (
-                          <AlertDialogAction onClick={() => handleDeleteBooking(booking.id)}>ลบ</AlertDialogAction>
-                        )}
-                        {booking.status !== "cancelled" && booking.status !== "payment_timeout" && (
-                          <AlertDialogAction className="bg-red-600 hover:bg-red-500" onClick={() => handleChangeStatus(booking.id, "cancelled")}>
-                            ปฏิเสธ
-                          </AlertDialogAction>
-                        )}
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-0.5">เบอร์โทร</p>
-                  <p>{booking.phone}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-0.5">ที่นั่ง</p>
-                  <div className="flex flex-wrap gap-1">
-                    {booking.seats.map((seat, i) => (
-                      <Badge key={i} variant="secondary" className="text-xs">
-                        {seat.tableName} ที่ {seat.seatNumber}{seat.studentName ? ` · ${seat.studentName}` : ""}{seat.classLevel ? ` (${seat.classLevel})` : ""}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-0.5">ราคารวม</p>
-                  <p className="text-lg font-bold text-primary">฿{booking.totalPrice}</p>
-                </div>
-              </div>
-              {booking.notes && (
-                <p className="text-xs text-muted-foreground mt-2 pt-2 border-t">หมายเหตุ: {booking.notes}</p>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-        {filteredBookings.length === 0 && (
-          <div className="text-center py-16 text-muted-foreground">ไม่พบข้อมูลการจองที่ตรงกับการค้นหา</div>
-        )}
-      </div>
-      {filteredBookings.length > bookingPageSize && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-          <p className="text-sm text-muted-foreground">
-            แสดง {bookingPageStart + 1}–{Math.min(bookingPageStart + bookingPageSize, filteredBookings.length)} จาก {filteredBookings.length} รายการ
-          </p>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled={bookingPage === 1} onClick={() => setBookingPage((page) => Math.max(1, page - 1))}>
-              ก่อนหน้า
-            </Button>
-            <span className="min-w-20 text-center text-sm text-muted-foreground">หน้า {bookingPage} / {bookingPageCount}</span>
-            <Button variant="outline" size="sm" disabled={bookingPage === bookingPageCount} onClick={() => setBookingPage((page) => Math.min(bookingPageCount, page + 1))}>
-              ถัดไป
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
   );
 
   // ─── Section: Zones ────────────────────────────────────────────────────────
@@ -720,13 +565,13 @@ export default function DashboardPage() {
             <CardHeader className="pb-2">
               <div className="flex justify-between items-center">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Settings className="h-4 w-4" />{zone.name}
+                  <MapPin className="h-4 w-4 text-muted-foreground" aria-hidden="true" />{zone.name}
                 </CardTitle>
                 <div className="flex items-center gap-2">
-                  <Switch checked={zone.isActive} onCheckedChange={(v) => handleZoneToggle(zone.id, v)} />
+                  <Switch checked={zone.isActive} onCheckedChange={(v) => void handleZoneToggle(zone.id, v)} aria-label={`เปิดหรือปิด${zone.name}`} />
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" aria-label={`ลบ${zone.name}`}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </AlertDialogTrigger>
@@ -737,7 +582,7 @@ export default function DashboardPage() {
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDeleteZone(zone.id)}>ยืนยันการลบ</AlertDialogAction>
+                        <AlertDialogAction className={buttonVariants({ variant: "destructive" })} onClick={() => handleDeleteZone(zone.id)}>ยืนยันการลบ</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
@@ -752,20 +597,20 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <Label className="text-sm">จองรายที่นั่ง</Label>
                 <Switch checked={zone.allowIndividualSeatBooking} disabled={!zone.isActive}
-                  onCheckedChange={(v) => handleIndividualSeatBookingToggle(zone.id, v)} />
+                  onCheckedChange={(v) => void handleIndividualSeatBookingToggle(zone.id, v)} />
               </div>
               <div className="grid grid-cols-2 gap-3 border-t pt-3">
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">ราคา/ที่นั่ง (บาท)</Label>
-                  <Input type="number" min="0" value={zone.seatPrice} className="text-right"
+                  <ZonePriceInput value={zone.seatPrice}
                     disabled={!zone.isActive || !zone.allowIndividualSeatBooking}
-                    onChange={(e) => handlePriceChange(zone.id, "seatPrice", +e.target.value || 0)} />
+                    onSave={(value) => handlePriceChange(zone.id, "seatPrice", value)} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">ราคา/โต๊ะ (บาท)</Label>
-                  <Input type="number" min="0" value={zone.tablePrice} className="text-right"
+                  <ZonePriceInput value={zone.tablePrice}
                     disabled={!zone.isActive}
-                    onChange={(e) => handlePriceChange(zone.id, "tablePrice", +e.target.value || 0)} />
+                    onSave={(value) => handlePriceChange(zone.id, "tablePrice", value)} />
                 </div>
               </div>
               <div className="flex items-center justify-between pt-1 border-t">
@@ -777,151 +622,95 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Summary card */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">สรุปภาพรวม</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-            <div>
-              <p className="text-2xl font-bold text-primary">{zoneConfigs.filter((z) => z.isActive).length}/{zoneConfigs.length}</p>
-              <p className="text-xs text-muted-foreground mt-1">โซนที่เปิดบริการ</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-green-600">{Object.values(zoneStats).reduce((a, b) => a + b, 0)}</p>
-              <p className="text-xs text-muted-foreground mt-1">ที่นั่งที่จองแล้ว</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-blue-600">{zoneConfigs.filter((z) => z.isActive).length * 180}</p>
-              <p className="text-xs text-muted-foreground mt-1">ที่นั่งที่เปิดบริการ</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-orange-600">{bookingHistory.filter((b) => b.status === "confirmed").length}</p>
-              <p className="text-xs text-muted-foreground mt-1">การจองที่ยืนยันแล้ว</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Summary */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard label="โซนที่เปิดบริการ" value={zoneConfigs.filter((z) => z.isActive).length} suffix={`/ ${zoneConfigs.length} โซน`} />
+        <StatCard label="ที่นั่งที่จองแล้ว" value={Object.values(zoneStats).reduce((a, b) => a + b, 0).toLocaleString("th-TH")} suffix="ที่นั่ง" />
+        <StatCard label="ที่นั่งที่เปิดบริการ" value={openSeatCapacity.toLocaleString("th-TH")} suffix="ที่นั่ง" />
+        <StatCard label="การจองที่ยืนยันแล้ว" value={bookingHistory.filter((b) => b.status === "confirmed").length.toLocaleString("th-TH")} suffix="รายการ" />
+      </div>
     </div>
   );
 
   // ─── Render ────────────────────────────────────────────────────────────────
+  const schoolMark = (
+    <Image src="/images/psm.png" alt="ตราโรงเรียนประสานมิตร" width={40} height={40} className="h-9 w-9 shrink-0 object-contain" />
+  );
+
   return (
-    // break out of the global main's px-4 py-8 padding
-    <div className="flex -mx-4 -mt-8 min-h-screen">
+    <div className="flex min-h-screen bg-muted/40">
 
       {/* ── Desktop Sidebar ───────────────────────────────────────────── */}
-      <aside className="hidden md:flex w-56 shrink-0 border-r flex-col bg-muted/30 sticky top-0 self-start h-screen overflow-y-auto">
-        <div className="px-4 py-5 border-b">
-          <p className="font-bold text-sm leading-tight">Admin Dashboard</p>
-          {siteSettings.projectTitle ? (
-            <p className="text-xs text-muted-foreground mt-0.5">{siteSettings.projectTitle}</p>
-          ) : (
-            <div className="mt-1 h-3 w-24 animate-pulse rounded bg-muted" />
-          )}
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r bg-card md:flex">
+        <div className="space-y-3 border-b px-4 py-4">
+          <div className="flex items-center gap-2.5">
+            {schoolMark}
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-primary">ผู้ดูแลระบบ</p>
+              {isLoadingSettings ? (
+                <div className="mt-1 h-4 w-28 animate-pulse rounded bg-muted" />
+              ) : (
+                <p className="line-clamp-2 text-sm font-bold leading-tight" title={eventName}>{eventName || "ระบบจองโต๊ะ"}</p>
+              )}
+            </div>
+          </div>
+          {bookingStatusPill}
         </div>
 
-        <nav className="flex-1 p-2 space-y-0.5 pt-3">
-          {NAV_ITEMS.map((item) => <SidebarItem key={item.id} item={item} />)}
+        <nav className="flex-1 space-y-0.5 overflow-y-auto p-2" aria-label="เมนูผู้ดูแล">
+          {NAV_ITEMS.map((item) => renderNavItem(item))}
         </nav>
 
+        <div className="space-y-0.5 border-t p-2">
+          <button type="button" onClick={() => router.push("/")} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+            <ExternalLink className="h-4 w-4" aria-hidden="true" />ไปหน้าเว็บจอง
+          </button>
+          <button type="button" onClick={handleLogout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+            <LogOut className="h-4 w-4" aria-hidden="true" />ออกจากระบบ
+          </button>
+          {user?.fullname && <p className="truncate px-3 pt-1 text-xs text-muted-foreground">{user.fullname}</p>}
+        </div>
       </aside>
 
       {/* ── Main Area ─────────────────────────────────────────────────── */}
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
 
-        {/* Mobile nav bar */}
-        <div className="md:hidden flex overflow-x-auto border-b bg-muted/30 px-2 py-1.5 gap-1 shrink-0">
-          {NAV_ITEMS.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveSection(item.id)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors shrink-0",
-                activeSection === item.id
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <item.icon className="h-3.5 w-3.5" />
-              {item.label}
-            </button>
-          ))}
+        {/* Mobile top bar */}
+        <div className="sticky top-0 z-20 border-b bg-card md:hidden">
+          <div className="flex items-center gap-2.5 px-4 py-2.5">
+            {schoolMark}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-bold">{eventName || "ระบบจองโต๊ะ"}</p>
+              <div className="mt-0.5">{bookingStatusPill}</div>
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => router.push("/")} aria-label="ไปหน้าเว็บจอง"><ExternalLink className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="ออกจากระบบ"><LogOut className="h-4 w-4" /></Button>
+          </div>
+          <nav className="flex gap-1 overflow-x-auto px-2 pb-2 [scrollbar-width:none]" aria-label="เมนูผู้ดูแล">
+            {NAV_ITEMS.map((item) => renderNavItem(item, true))}
+          </nav>
         </div>
 
         {/* Content */}
-        <div className="flex-1 p-5 md:p-6 space-y-6">
+        <div className="mx-auto w-full max-w-[1400px] flex-1 space-y-5 p-4 md:p-6 lg:p-8">
 
           {/* Page header */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="text-xl font-bold">
-                {NAV_ITEMS.find((i) => i.id === activeSection)?.label}
-              </h2>
-              {activeSection === "bookings" && (
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  แสดง {filteredBookings.length} / {bookingHistory.length} รายการ
-                </p>
-              )}
-            </div>
-            <Button variant="outline" size="sm" className="shrink-0 gap-2" onClick={() => router.push("/")}>
-              <Home className="h-4 w-4" />
-              กลับหน้าหลัก
-            </Button>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight">{activeNavItem.label}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{activeNavItem.description}</p>
           </div>
 
           {/* Section content */}
-          {activeSection === "stats" && <BookingStats />}
-          {activeSection === "bookings" && BookingsSection()}
-          {activeSection === "checkin" && <DashboardCheckInMap eventName={siteSettings.projectSubtitle || siteSettings.projectTitle || "โครงการปัจจุบัน"} />}
-          {activeSection === "zones" && <ZonesSection />}
+          {activeSection === "overview" && <DashboardOverview onOpenBookings={openBookings} onOpenSection={navigateTo} />}
+          {activeSection === "bookings" && (
+            <DashboardBookings searchTerm={searchTerm} onSearchTermChange={setSearchTerm} statusFilter={statusFilter} onStatusFilterChange={setStatusFilter} />
+          )}
+          {activeSection === "checkin" && <DashboardCheckInMap eventName={eventName || "โครงการปัจจุบัน"} />}
+          {activeSection === "zones" && ZonesSection()}
           {activeSection === "layout" && <TableLayoutEditor />}
           {activeSection === "settings" && SettingsSection()}
         </div>
       </div>
     </div>
-  );
-}
-
-// ─── Edit Booking Form ─────────────────────────────────────────────────────
-function EditBookingForm({
-  booking, onSave, onCancel,
-}: {
-  booking: BookingRecord;
-  onSave: (updates: Partial<BookingRecord>) => Promise<void>;
-  onCancel: () => void;
-}) {
-  const [formData, setFormData] = useState({
-    customerName: booking.customerName,
-    phone: booking.phone,
-    notes: booking.notes || "",
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    void onSave({ customerName: formData.customerName, phone: formData.phone, notes: formData.notes });
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="edit-name">ชื่อ-นามสกุล</Label>
-        <Input id="edit-name" value={formData.customerName} required
-          onChange={(e) => setFormData((p) => ({ ...p, customerName: e.target.value }))} />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="edit-phone">เบอร์โทรศัพท์</Label>
-        <Input id="edit-phone" value={formData.phone} required
-          onChange={(e) => setFormData((p) => ({ ...p, phone: e.target.value }))} />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="edit-notes">หมายเหตุ</Label>
-        <Textarea id="edit-notes" rows={3} value={formData.notes}
-          onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))} />
-      </div>
-      <div className="flex gap-2 justify-end">
-        <Button type="button" variant="outline" onClick={onCancel}>ยกเลิก</Button>
-        <Button type="submit">บันทึก</Button>
-      </div>
-    </form>
   );
 }
