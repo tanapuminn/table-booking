@@ -158,7 +158,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const fetchData = async () => {
       if (authLoading) return;
-      if (["/login", "/register", "/forgot-password"].includes(pathname)) {
+      if (["/login", "/register", "/forgot-password", "/reset-password"].includes(pathname)) {
         setIsLoading(false);
         setError(null);
         return;

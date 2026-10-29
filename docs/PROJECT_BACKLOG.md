@@ -12,7 +12,7 @@
   - [x] เฟส 2: หน้าการจองเป็นตาราง (จอ lg ขึ้นไป) / รายการ (จอเล็ก) พร้อมแท็บสถานะ และ side sheet ดูรายละเอียด สลิป แก้ไขข้อมูลผู้จอง และเปลี่ยนสถานะ (`components/dashboard-bookings.tsx`)
   - [x] เฟส 3: ผังโต๊ะเก็บขนาด Grid รายโซนใน `zoneConfig.gridRows/gridCols` (API ตรวจ 5–20 และกันโต๊ะหลุดผัง) พร้อมย้ายโต๊ะแบบแตะ, เช็กอินมีปุ่มที่นั่ง 36px ตัวกรองการมาถึง และ bottom sheet บนจอแคบ, หน้าโซนเป็นรายการพร้อมแถบความจุและสถานะบันทึกราคา, หน้าตั้งค่าแบ่งการ์ดและใช้แถบบันทึกเดียว (`components/table-layout-editor.tsx`, `components/dashboard-checkin-map.tsx`, `components/dashboard-zones.tsx`, `components/dashboard-settings.tsx`, `table-api/src/utils/zoneGrid.js`)
   - ขนาดผังที่เคยเก็บใน `localStorage` ไม่ได้ย้ายไปฐานข้อมูลให้อัตโนมัติ ทุกโซนเริ่มที่ 10×10 แต่ผังจะขยายให้ครอบโต๊ะที่อยู่นอกขนาดเสมอ
-- [ ] **ระบบรีเซ็ตรหัสผ่าน** — กำหนดวิธียืนยันตัวตน ช่องทางส่งลิงก์/รหัส และอายุการใช้งานก่อนพัฒนา
+- [x] **ระบบรีเซ็ตรหัสผ่าน** — ส่งลิงก์ทางอีเมล (`POST /api/auth/forgot-password`) ใช้ได้ครั้งเดียว อายุ 15 นาที ตั้งรหัสใหม่ที่หน้า `/reset-password` (`POST /api/auth/reset-password`) แล้ว session เดิมทุกเครื่องหมดอายุ บัญชีที่สมัครด้วย Google ก็ตั้งรหัสผ่านผ่านช่องทางนี้ได้ ต้องตั้ง `FRONTEND_URL` และ SMTP ใน `table-api/.env` (`table-api/src/controllers/authController.js`, `app/(auth)/reset-password/page.tsx`)
 - [x] **ปรับรายงาน Excel** — เพิ่มชีตสรุปหนึ่งแถวต่อการจองและชีตรายละเอียดหนึ่งแถวต่อที่นั่ง โดยแสดงชื่อและชั้นของผู้ที่นั่งอย่างชัดเจน รองรับการจองหลายที่นั่ง (`table-api/src/controllers/bookingController.js`)
 
 ## งานที่พักไว้
