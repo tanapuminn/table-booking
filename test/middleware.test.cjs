@@ -28,6 +28,8 @@ test('dashboard middleware admits admins and rejects other sessions before rende
     assert.equal(admin.status, 200)
     const nestedAdmin = await middleware(requestFor('/psmnlp-dashboard/settings'))
     assert.equal(nestedAdmin.status, 200)
+    assert.equal((await middleware(requestFor('/login'))).status, 307)
+    assert.equal((await middleware(requestFor('/reset-password'))).status, 200)
 
     global.fetch = async () => ({ status: 200, ok: true, json: async () => ({ user: { role: 'user' } }) })
     const customer = await middleware(requestFor('/psmnlp-dashboard'))
@@ -52,6 +54,7 @@ test('dashboard middleware admits admins and rejects other sessions before rende
     assert.equal(anonymous.status, 307)
     assert.equal(anonymous.headers.get('location'), 'http://localhost:3000/login?redirect=%2Fpsmnlp-dashboard')
     assert.equal((await middleware(requestFor('/forgot-password', false))).status, 200)
+    assert.equal((await middleware(requestFor('/reset-password', false))).status, 200)
   } finally {
     global.fetch = originalFetch
   }

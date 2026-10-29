@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-const PUBLIC_PATHS = ["/login", "/register", "/forgot-password"]
+const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"]
 const ADMIN_PATH = "/psmnlp-dashboard"
 
 const unavailableResponse = () => new NextResponse(
@@ -40,7 +40,8 @@ export async function middleware(request: NextRequest) {
       return response
     }
 
-    if (authResponse.ok && isPublicPath) {
+    // ลิงก์ตั้งรหัสผ่านใหม่จากอีเมลต้องเปิดได้แม้เบราว์เซอร์นั้นล็อกอินอยู่
+    if (authResponse.ok && isPublicPath && pathname !== "/reset-password") {
       return NextResponse.redirect(new URL("/", request.url))
     }
     if (isAdminPath) {
@@ -72,5 +73,6 @@ export const config = {
     "/login",
     "/register",
     "/forgot-password",
+    "/reset-password",
   ],
 }
