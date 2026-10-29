@@ -76,8 +76,9 @@ const matchesSearch = (booking: BookingRecord, query: string) => {
 };
 
 export function DashboardBookings({
-  searchTerm, onSearchTermChange, statusFilter, onStatusFilterChange,
+  initialBookingId = null, searchTerm, onSearchTermChange, statusFilter, onStatusFilterChange,
 }: {
+  initialBookingId?: string | null;
   searchTerm: string;
   onSearchTermChange: (value: string) => void;
   statusFilter: string;
@@ -88,7 +89,7 @@ export function DashboardBookings({
   const { bookingHistory, setBookingHistory, updateBookingRecord } = useBooking();
 
   const [page, setPage] = useState(1);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialBookingId);
   const [isEditing, setIsEditing] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [isActionRunning, setIsActionRunning] = useState(false);

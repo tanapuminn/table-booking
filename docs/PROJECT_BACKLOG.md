@@ -7,10 +7,11 @@
 - [x] **เพิ่มโซนแล้วแสดงในหน้าแอดมินทันที** — ใช้ข้อมูลโซนที่ API ตอบกลับมาเพิ่มเข้า state โดยตรงหลัง `POST /api/zones` สำเร็จ (`app/psmnlp-dashboard/page.tsx`, `components/booking-provider.tsx`)
 - [x] **แสดงผลการบันทึกของแอดมินตาม API จริง** — การเปลี่ยนราคา เปิด/ปิดโซน ตั้งค่าการจองรายที่นั่ง ย้ายโต๊ะ เปิด/ปิดโต๊ะ และรีเซ็ตผัง จะรอ API สำเร็จก่อนแจ้งผล และแสดงข้อผิดพลาดเมื่อบันทึกไม่สำเร็จ (`app/psmnlp-dashboard/page.tsx`, `components/table-layout-editor.tsx`, `components/booking-provider.tsx`)
 - [x] **ป้องกันชื่อโต๊ะซ้ำหลังลบโต๊ะ** — ตั้งชื่อจากเลขท้ายที่มากที่สุดในโซน + 1 และให้ API ปฏิเสธชื่อที่ซ้ำในโซน (`components/booking-provider.tsx`, `lib/table-naming.ts`, `table-api/src/controllers/tableController.js`)
-- [ ] **Redesign หน้า Dashboard และการจัดเก็บขนาดผังโต๊ะ** — ทำสองเรื่องนี้พร้อมกัน เพื่อตัดสินใจรูปแบบหน้าจอจัดผังและย้ายขนาด Grid (`rows`/`cols`) จาก `localStorage` ไปเก็บเป็นข้อมูลส่วนกลางในฐานข้อมูล โดยให้แอดมินทุกเครื่องเห็นขนาดผังตรงกัน (`components/table-layout-editor.tsx`)
+- [x] **Redesign หน้า Dashboard และการจัดเก็บขนาดผังโต๊ะ** — ทำสองเรื่องนี้พร้อมกัน เพื่อตัดสินใจรูปแบบหน้าจอจัดผังและย้ายขนาด Grid (`rows`/`cols`) จาก `localStorage` ไปเก็บเป็นข้อมูลส่วนกลางในฐานข้อมูล โดยให้แอดมินทุกเครื่องเห็นขนาดผังตรงกัน (`components/table-layout-editor.tsx`)
   - [x] เฟส 1: โครงหน้าแอดมินแยกจากเว็บหลัก เมนูผูกกับ `?section=` หน้าภาพรวมใหม่ สีสถานะเป็น token และแก้ความจุโซนที่เคยใช้เลข 180 ตายตัว (`app/psmnlp-dashboard/page.tsx`, `components/dashboard-overview.tsx`, `lib/dashboard-metrics.ts`)
   - [x] เฟส 2: หน้าการจองเป็นตาราง (จอ lg ขึ้นไป) / รายการ (จอเล็ก) พร้อมแท็บสถานะ และ side sheet ดูรายละเอียด สลิป แก้ไขข้อมูลผู้จอง และเปลี่ยนสถานะ (`components/dashboard-bookings.tsx`)
-  - [ ] เฟส 3: ปรับหน้าเช็กอิน (ปุ่มที่นั่งใหญ่ขึ้น, bottom sheet บนมือถือ), โซน, ผังโต๊ะ (ย้ายขนาด Grid ไปฐานข้อมูล) และตั้งค่า
+  - [x] เฟส 3: ผังโต๊ะเก็บขนาด Grid รายโซนใน `zoneConfig.gridRows/gridCols` (API ตรวจ 5–20 และกันโต๊ะหลุดผัง) พร้อมย้ายโต๊ะแบบแตะ, เช็กอินมีปุ่มที่นั่ง 36px ตัวกรองการมาถึง และ bottom sheet บนจอแคบ, หน้าโซนเป็นรายการพร้อมแถบความจุและสถานะบันทึกราคา, หน้าตั้งค่าแบ่งการ์ดและใช้แถบบันทึกเดียว (`components/table-layout-editor.tsx`, `components/dashboard-checkin-map.tsx`, `components/dashboard-zones.tsx`, `components/dashboard-settings.tsx`, `table-api/src/utils/zoneGrid.js`)
+  - ขนาดผังที่เคยเก็บใน `localStorage` ไม่ได้ย้ายไปฐานข้อมูลให้อัตโนมัติ ทุกโซนเริ่มที่ 10×10 แต่ผังจะขยายให้ครอบโต๊ะที่อยู่นอกขนาดเสมอ
 - [ ] **ระบบรีเซ็ตรหัสผ่าน** — กำหนดวิธียืนยันตัวตน ช่องทางส่งลิงก์/รหัส และอายุการใช้งานก่อนพัฒนา
 - [x] **ปรับรายงาน Excel** — เพิ่มชีตสรุปหนึ่งแถวต่อการจองและชีตรายละเอียดหนึ่งแถวต่อที่นั่ง โดยแสดงชื่อและชั้นของผู้ที่นั่งอย่างชัดเจน รองรับการจองหลายที่นั่ง (`table-api/src/controllers/bookingController.js`)
 

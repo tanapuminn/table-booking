@@ -16,7 +16,7 @@ const STATUS_ORDER: BookingStatus[] = ["confirmed", "pending_payment", "payment_
 export function DashboardOverview({
   onOpenBookings, onOpenSection,
 }: {
-  onOpenBookings: (status?: BookingStatus) => void
+  onOpenBookings: (status?: BookingStatus | "all", bookingId?: string) => void
   onOpenSection: (section: "checkin" | "zones") => void
 }) {
   const { bookingHistory, zoneConfigs, tablePositions, isLoading } = useBooking()
@@ -144,7 +144,12 @@ export function DashboardOverview({
                   const status = getBookingStatusMeta(booking.status)
                   const tables = Array.from(new Set(booking.seats.map((seat) => seat.tableName || `${seat.zone}${seat.tableId}`)))
                   return (
-                    <li key={booking.id} className="flex items-center gap-3 py-2.5">
+                    <li key={booking.id}>
+                      <button
+                        type="button"
+                        onClick={() => onOpenBookings("all", booking.id)}
+                        className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{booking.customerName}</p>
                         <p className="truncate text-xs text-muted-foreground">
@@ -153,6 +158,7 @@ export function DashboardOverview({
                       </div>
                       <span className="hidden shrink-0 text-sm font-medium tabular-nums sm:inline">{formatBaht(booking.totalPrice)}</span>
                       <span className={cn("shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium", status.badgeClass)}>{status.label}</span>
+                      </button>
                     </li>
                   )
                 })}
