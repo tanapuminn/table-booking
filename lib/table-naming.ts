@@ -4,14 +4,20 @@ type NamedTable = {
 }
 
 export function getNextTableName(zone: string, tables: NamedTable[]): string {
-  const highestSuffix = tables.reduce((highest, table) => {
-    if (table.zone !== zone || !table.name.startsWith(zone)) return highest
+  const usedSuffixes = new Set<number>()
+
+  tables.forEach((table) => {
+    if (table.zone !== zone || !table.name.startsWith(zone)) return
 
     const suffix = table.name.slice(zone.length)
-    if (!/^\d+$/.test(suffix)) return highest
+    if (!/^\d+$/.test(suffix)) return
 
-    return Math.max(highest, Number(suffix))
-  }, 0)
+    const value = Number(suffix)
+    if (value > 0) usedSuffixes.add(value)
+  })
 
-  return `${zone}${highestSuffix + 1}`
+  let nextSuffix = 1
+  while (usedSuffixes.has(nextSuffix)) nextSuffix += 1
+
+  return `${zone}${nextSuffix}`
 }

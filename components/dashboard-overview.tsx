@@ -17,7 +17,7 @@ export function DashboardOverview({
   onOpenBookings, onOpenSection,
 }: {
   onOpenBookings: (status?: BookingStatus | "all", bookingId?: string) => void
-  onOpenSection: (section: "checkin" | "zones") => void
+  onOpenSection: (section: "checkin" | "layout") => void
 }) {
   const { bookingHistory, zoneConfigs, tablePositions, isLoading } = useBooking()
 
@@ -100,7 +100,7 @@ export function DashboardOverview({
             {activeOccupancy.length === 0 ? (
               <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
                 ยังไม่มีโซนที่เปิดให้จอง
-                <Button variant="link" className="h-auto p-0 pl-1" onClick={() => onOpenSection("zones")}>ไปที่โซนและราคา</Button>
+                <Button variant="link" className="h-auto p-0 pl-1" onClick={() => onOpenSection("layout")}>ไปที่ผังโต๊ะและโซน</Button>
               </div>
             ) : (
               activeOccupancy.map(({ zone, capacity: zoneCapacity, confirmedSeats, heldSeats }) => {

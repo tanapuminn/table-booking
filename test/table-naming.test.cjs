@@ -15,11 +15,21 @@ namingModule.paths = Module._nodeModulePaths(path.dirname(sourcePath))
 namingModule._compile(compiled, sourcePath)
 const { getNextTableName } = namingModule.exports
 
-test('uses the highest existing table suffix instead of the table count', () => {
+test('reuses the first missing suffix after a table is deleted', () => {
   const tables = [
     { zone: 'A', name: 'A1' },
     { zone: 'A', name: 'A3' },
     { zone: 'B', name: 'B9' },
+  ]
+
+  assert.equal(getNextTableName('A', tables), 'A2')
+})
+
+test('appends the next suffix when there are no gaps', () => {
+  const tables = [
+    { zone: 'A', name: 'A1' },
+    { zone: 'A', name: 'A2' },
+    { zone: 'A', name: 'A3' },
   ]
 
   assert.equal(getNextTableName('A', tables), 'A4')

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-const PUBLIC_PATHS = ["/login", "/register"]
+const PUBLIC_PATHS = ["/login", "/register", "/forgot-password"]
 const ADMIN_PATH = "/psmnlp-dashboard"
 
 const unavailableResponse = () => new NextResponse(
@@ -71,5 +71,6 @@ export const config = {
     "/psmnlp-dashboard/:path*",
     "/login",
     "/register",
+    "/forgot-password",
   ],
 }

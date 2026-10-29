@@ -176,7 +176,7 @@ export function DashboardSettings({
   const activeZoneCount = zoneConfigs.filter((zone) => zone.isActive).length;
   const checklist = [
     { done: settings.paymentConfigured, label: "ตั้งค่าช่องทางรับชำระเงินแล้ว", hint: "กรอกในการ์ดการชำระเงินด้านล่างแล้วกดบันทึก" },
-    { done: activeZoneCount > 0, label: `มีโซนที่เปิดขาย (${activeZoneCount} โซน)`, hint: "เปิดอย่างน้อยหนึ่งโซนในหน้าโซนและราคา" },
+    { done: activeZoneCount > 0, label: `มีโซนที่เปิดขาย (${activeZoneCount} โซน)`, hint: "เปิดอย่างน้อยหนึ่งโซนในหน้าผังโต๊ะและโซน" },
   ];
   const fieldError = (key: keyof FormErrors) => errors[key] && <p className="text-xs text-destructive" role="alert">{errors[key]}</p>;
   const shownBankImage = bankImagePreview || settings.bankAccountImage;

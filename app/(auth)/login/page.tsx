@@ -19,6 +19,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/password-input"
 import {
   Card,
   CardContent,
@@ -128,9 +129,14 @@ function LoginForm() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>รหัสผ่าน</FormLabel>
+                    <div className="flex items-center justify-between gap-3">
+                      <FormLabel>รหัสผ่าน</FormLabel>
+                      <Link href="/forgot-password" className="text-sm font-medium text-primary hover:underline">
+                        ลืมรหัสผ่าน?
+                      </Link>
+                    </div>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
+                      <PasswordInput placeholder="••••••••" autoComplete="current-password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

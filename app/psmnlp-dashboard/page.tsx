@@ -6,14 +6,13 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
 import {
-  LayoutDashboard, BookOpen, LayoutGrid, MapPin, ScanLine,
+  LayoutDashboard, BookOpen, LayoutGrid, ScanLine,
   Settings, LogOut, ExternalLink,
 } from "lucide-react";
 import { useBooking } from "@/components/booking-provider";
 import { TableLayoutEditor } from "@/components/table-layout-editor";
 import { DashboardOverview } from "@/components/dashboard-overview";
 import { DashboardBookings } from "@/components/dashboard-bookings";
-import { DashboardZones } from "@/components/dashboard-zones";
 import { DashboardSettings } from "@/components/dashboard-settings";
 import { DashboardCheckInMap } from "@/components/dashboard-checkin-map";
 import { useLoadingRouter } from "@/components/navigation-loading";
@@ -23,14 +22,13 @@ import { apiBaseUrl as baseURL } from "@/lib/api";
 import { type BookingStatus } from "@/lib/booking-status";
 import { EMPTY_SITE_SETTINGS, type SiteSettings, normalizeSiteSettings } from "@/lib/site-settings";
 
-type Section = "overview" | "bookings" | "checkin" | "zones" | "layout" | "settings";
+type Section = "overview" | "bookings" | "checkin" | "layout" | "settings";
 
 const NAV_ITEMS: { id: Section; label: string; description: string; icon: React.ElementType }[] = [
   { id: "overview", label: "ภาพรวม", description: "ยอดจอง ที่นั่ง และสิ่งที่ต้องติดตาม", icon: LayoutDashboard },
   { id: "bookings", label: "การจอง", description: "ค้นหา ตรวจสอบ และจัดการรายการจอง", icon: BookOpen },
   { id: "checkin", label: "เช็กอินหน้างาน", description: "ตรวจรายชื่อและยืนยันการมาถึงตามที่นั่ง", icon: ScanLine },
-  { id: "zones", label: "โซนและราคา", description: "เปิด/ปิดโซน และกำหนดราคาที่นั่งหรือทั้งโต๊ะ", icon: MapPin },
-  { id: "layout", label: "ผังโต๊ะ", description: "จัดตำแหน่งโต๊ะในแต่ละโซน", icon: LayoutGrid },
+  { id: "layout", label: "ผังโต๊ะและโซน", description: "จัดโซน ราคา และตำแหน่งโต๊ะทั้งหมดบนผังเดียว", icon: LayoutGrid },
   { id: "settings", label: "ตั้งค่า", description: "ข้อมูลโครงการ การรับจอง และช่องทางชำระเงิน", icon: Settings },
 ];
 const DEFAULT_SECTION: Section = "overview";
@@ -38,6 +36,7 @@ const DEFAULT_SECTION: Section = "overview";
 // เก็บเมนูที่เลือกไว้ใน ?section= เพื่อให้ refresh, ปุ่ม back และการแชร์ลิงก์กลับมาที่หน้าเดิม
 const readSectionFromUrl = (): Section => {
   const value = new URLSearchParams(window.location.search).get("section");
+  if (value === "zones") return "layout";
   return NAV_ITEMS.some((item) => item.id === value) ? (value as Section) : DEFAULT_SECTION;
 };
 
@@ -220,7 +219,6 @@ export default function DashboardPage() {
             <DashboardBookings initialBookingId={focusBookingId} searchTerm={searchTerm} onSearchTermChange={setSearchTerm} statusFilter={statusFilter} onStatusFilterChange={setStatusFilter} />
           )}
           {activeSection === "checkin" && <DashboardCheckInMap />}
-          {activeSection === "zones" && <DashboardZones />}
           {activeSection === "layout" && <TableLayoutEditor />}
           {activeSection === "settings" && <DashboardSettings settings={siteSettings} isLoading={isLoadingSettings} onSettingsChange={setSiteSettings} />}
         </div>

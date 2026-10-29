@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (axios.isAxiosError(error) && error.response?.status === 401) {
           const pathname = window.location.pathname
-          if (pathname !== "/" && pathname !== "/login" && pathname !== "/register") {
+          if (pathname !== "/" && pathname !== "/login" && pathname !== "/register" && pathname !== "/forgot-password") {
             const redirect = encodeURIComponent(pathname + window.location.search)
             window.location.replace(`/login?redirect=${redirect}`)
           }

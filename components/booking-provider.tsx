@@ -58,6 +58,7 @@ export interface ZoneConfig {
   tablePrice: number // ราคาต่อโต๊ะเมื่อจองทั้งโต๊ะ (9 ที่นั่ง)
   gridRows?: number // ขนาดผังโต๊ะของโซน (API ใส่ค่าเริ่มต้น 10)
   gridCols?: number
+  color?: string
 }
 
 // เพิ่ม interface สำหรับตำแหน่งโต๊ะ
@@ -373,7 +374,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
       const maxId = allTables.length > 0 ? Math.max(...allTables.map((table: TablePosition) => table.id)) : 0;
       const newId = maxId + 1;
 
-      // ใช้เลขท้ายที่มากที่สุด เพื่อไม่สร้างชื่อซ้ำเมื่อมีการลบโต๊ะก่อนหน้า
+      // ใช้เลขว่างลำดับแรก เช่น เหลือ A1, A3 โต๊ะใหม่จะเป็น A2
       const newName = getNextTableName(zone, allTables);
 
       // สร้าง payload สำหรับ API
