@@ -31,6 +31,7 @@ export function TableLayoutEditor() {
   const [selectedZone, setSelectedZone] = useState("A")
   const [isEditMode, setIsEditMode] = useState(false)
   const [draggedTable, setDraggedTable] = useState<TablePosition | null>(null)
+  const [isResetting, setIsResetting] = useState(false)
 
   // เพิ่ม state สำหรับขนาด grid
   const [gridSize, setGridSize] = useState({ rows: 10, cols: 10 })
@@ -99,7 +100,7 @@ const handleTableDragStart = (table: TablePosition) => {
   setDraggedTable(table)
 }
 
-const handleTableDrop = (x: number, y: number) => {
+const handleTableDrop = async (x: number, y: number) => {
   if (!draggedTable || !isEditMode) return
 
   // ตรวจสอบว่าตำแหน่งใหม่ว่างหรือไม่
@@ -115,12 +116,17 @@ const handleTableDrop = (x: number, y: number) => {
     return
   }
 
-  updateTablePosition(draggedTable.id, x, y)
-  toast({
-    title: "ย้ายโต๊ะสำเร็จ",
-    description: `ย้าย${draggedTable.name} ไปยังตำแหน่ง (${x}, ${y})`,
-  })
-  setDraggedTable(null)
+  try {
+    await updateTablePosition(draggedTable.id, x, y)
+    toast({
+      title: "ย้ายโต๊ะสำเร็จ",
+      description: `ย้าย${draggedTable.name} ไปยังตำแหน่ง (${x}, ${y})`,
+    })
+  } catch {
+    toast({ title: "ย้ายโต๊ะไม่สำเร็จ", description: "กรุณาลองอีกครั้ง", variant: "destructive" })
+  } finally {
+    setDraggedTable(null)
+  }
 }
 
 const handleRemoveTable = async (tableId: number) => {
@@ -141,23 +147,37 @@ const handleRemoveTable = async (tableId: number) => {
   }
 }
 
-const resetLayout = () => {
+const resetLayout = async () => {
   // รีเซ็ตเป็นตำแหน่งเริ่มต้น
   const defaultPositions = Array.from({ length: 20 }, (_, i) => ({
     x: (i % 5) * 2,
     y: Math.floor(i / 5) * 2,
   }))
 
-  zoneTables.forEach((table, index) => {
-    if (defaultPositions[index]) {
-      updateTablePosition(table.id, defaultPositions[index].x, defaultPositions[index].y)
-    }
-  })
+  setIsResetting(true)
+  try {
+    await Promise.all(zoneTables.map((table, index) => {
+      const position = defaultPositions[index]
+      return position ? updateTablePosition(table.id, position.x, position.y) : Promise.resolve(table)
+    }))
+    toast({
+      title: "รีเซ็ตเลย์เอาต์สำเร็จ",
+      description: `รีเซ็ตตำแหน่งโต๊ะในโซน ${selectedZone} เป็นค่าเริ่มต้น`,
+    })
+  } catch {
+    toast({ title: "รีเซ็ตเลย์เอาต์ไม่สำเร็จ", description: "มีบางตำแหน่งที่บันทึกไม่ได้ กรุณาลองอีกครั้ง", variant: "destructive" })
+  } finally {
+    setIsResetting(false)
+  }
+}
 
-  toast({
-    title: "รีเซ็ตเลย์เอาต์สำเร็จ",
-    description: `รีเซ็ตตำแหน่งโต๊ะในโซน ${selectedZone} เป็นค่าเริ่มต้น`,
-  })
+const handleToggleTableActive = async (table: TablePosition) => {
+  try {
+    const updatedTable = await toggleTableActive(table.id)
+    toast({ title: `${updatedTable.isActive ? "เปิด" : "ปิด"}${table.name}สำเร็จ` })
+  } catch {
+    toast({ title: "เปลี่ยนสถานะโต๊ะไม่สำเร็จ", description: "กรุณาลองอีกครั้ง", variant: "destructive" })
+  }
 }
 
 // เพิ่มฟังก์ชันสำหรับปรับขนาด grid
@@ -284,7 +304,7 @@ return (
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-                    <AlertDialogAction onClick={resetLayout}>รีเซ็ต</AlertDialogAction>
+                    <AlertDialogAction onClick={() => void resetLayout()} disabled={isResetting}>รีเซ็ต</AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
@@ -387,7 +407,7 @@ return (
                             className="h-7 w-7 p-0 bg-white shadow-sm"
                             onClick={(e) => {
                               e.stopPropagation()
-                              toggleTableActive(table.id)
+                              void handleToggleTableActive(table)
                             }}
                           >
                             {table.isActive ? "🔵" : "⚫"}
