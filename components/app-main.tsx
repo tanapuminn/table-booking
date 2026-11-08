@@ -13,5 +13,16 @@ export function AppMain({ children }: { children: ReactNode }) {
     return <main>{children}</main>
   }
 
-  return <main className="mx-auto w-full max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+  return (
+    <>
+      <main className="mx-auto w-full max-w-[1480px] flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        {children}
+      </main>
+      <footer className="border-t border-border bg-background" role="contentinfo">
+        <div className="mx-auto w-full max-w-[1480px] px-4 py-4 text-center text-sm text-muted-foreground sm:px-6 lg:px-8">
+          © 2025 Focus Works Studio. All rights reserved.
+        </div>
+      </footer>
+    </>
+  )
 }

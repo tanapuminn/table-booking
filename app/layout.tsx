@@ -32,7 +32,7 @@ export default function RootLayout({
           <ErrorBoundary>
             <AuthProvider>
               <BookingProvider>
-                <div className="min-h-screen bg-background">
+                <div className="flex min-h-screen flex-col bg-background">
                   <Header />
                   <AppMain>{children}</AppMain>
                 </div>
